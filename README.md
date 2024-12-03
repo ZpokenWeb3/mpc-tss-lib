@@ -9,8 +9,19 @@
 [6]: https://goreportcard.com/report/github.com/bnb-chain/tss-lib
 
 Permissively MIT Licensed.
+Zpoken has used the initial implementation from BNB Chain (forked) as a foundation. Our goal is to build upon this base to create a more advanced library, to extend the needs of modern blockchain applications and gross MPC(Multi party computation community).
 
-Note! This is a library for developers. You may find a TSS tool that you can use with the Binance Chain CLI [here](https://docs.binance.org/tss.html).
+Zpoken has used the initial implementation from **BNB Chain** (forked) as a foundation. Our goal is to build upon this base to create a more advanced library that meets the needs of modern blockchain applications and fosters the growth of the **MPC (Multi-Party Computation) community**.
+
+## Current Goals
+
+- [x] EcDSA.
+- [x] EdDSA.
+- [ ] Baby Jubjub Elliptic Curve.
+- [ ] Poseidon Hash.
+- [ ] RSA.
+- [ ] BLS12-381
+- [ ] Ed25519
 
 ## Introduction
 This is an implementation of multi-party {t,n}-threshold ECDSA (Elliptic Curve Digital Signature Algorithm) based on Gennaro and Goldfeder CCS 2018 [1] and EdDSA (Edwards-curve Digital Signature Algorithm) following a similar approach.
