@@ -14,13 +14,21 @@ Zpoken has used the initial implementation from **BNB Chain** (forked) as a foun
 
 ## Current Goals
 
-- [x] EcDSA.
-- [x] EdDSA.
-- [ ] Baby Jubjub Elliptic Curve.
-- [ ] Poseidon Hash.
-- [ ] RSA.
+Signatures:               
+- [x] ECDSA
+- [x] EdDSA
+- [ ] RSA signatures    
+    - [ ] PSS
+    - [ ] PKCS1v15
+- [ ] BLS
+
+Hashes:
+- [ ] Poseidon
+
+Elliptic curves:
+- [ ] Baby Jubjub Elliptic Curve
+- [ ] BLS12-377
 - [ ] BLS12-381
-- [ ] Ed25519
 
 ## Introduction
 This is an implementation of multi-party {t,n}-threshold ECDSA (Elliptic Curve Digital Signature Algorithm) based on Gennaro and Goldfeder CCS 2018 [1] and EdDSA (Edwards-curve Digital Signature Algorithm) following a similar approach.
