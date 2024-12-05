@@ -147,3 +147,17 @@ func TestGenerateKeys_validFixed(t *testing.T) {
 	}
 
 }
+
+func BenchmarkNewKey(b *testing.B) {
+	k := uint16(3)
+	l := uint16(5)
+	bitSize := 4096
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _, err := NewKey(bitSize, k, l, nil)
+		if err != nil {
+			b.Fatalf("Error creating key shares: %v", err)
+		}
+	}
+}

@@ -51,3 +51,104 @@ func TestSignPKCS1v15(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func BenchmarkSigSharesGenerationPKCS1v15(b *testing.B) {
+	k := uint16(3)
+	l := uint16(5)
+	keySize := 4096
+
+	keyShares, keyMeta, err := NewKey(keySize, k, l, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	docHash := sha256.Sum256([]byte("Hello world"))
+	docPKCS1, err := PrepareDocumentHash(keyMeta.PublicKey.Size(), crypto.SHA256, docHash[:])
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	var i uint16
+
+	b.ResetTimer()
+	for j := 0; j < b.N; j++ {
+		for i = 0; i < l; i++ {
+			_, err = keyShares[i].Sign(docPKCS1, crypto.SHA256, keyMeta)
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
+func BenchmarkSigSharesCombinePKCS1v15(b *testing.B) {
+	k := uint16(3)
+	l := uint16(5)
+	keySize := 4096
+
+	keyShares, keyMeta, err := NewKey(keySize, k, l, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	docHash := sha256.Sum256([]byte("Hello world"))
+	docPKCS1, err := PrepareDocumentHash(keyMeta.PublicKey.Size(), crypto.SHA256, docHash[:])
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	sigShares := make(SigShareList, l)
+	var i uint16
+	for i = 0; i < l; i++ {
+		sigShares[i], err = keyShares[i].Sign(docPKCS1, crypto.SHA256, keyMeta)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := sigShares.Join(docPKCS1, keyMeta)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkSigSharesVerificationPKCS1v15(b *testing.B) {
+	k := uint16(3)
+	l := uint16(5)
+	keySize := 4096
+
+	keyShares, keyMeta, err := NewKey(keySize, k, l, nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	docHash := sha256.Sum256([]byte("Hello world"))
+	docPKCS1, err := PrepareDocumentHash(keyMeta.PublicKey.Size(), crypto.SHA256, docHash[:])
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	sigShares := make(SigShareList, l)
+	var i uint16
+	for i = 0; i < l; i++ {
+		sigShares[i], err = keyShares[i].Sign(docPKCS1, crypto.SHA256, keyMeta)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	signature, err := sigShares.Join(docPKCS1, keyMeta)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := rsa.VerifyPKCS1v15(keyMeta.PublicKey, crypto.SHA256, docHash[:], signature); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

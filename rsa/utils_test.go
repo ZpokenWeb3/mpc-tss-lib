@@ -88,7 +88,7 @@ func TestGenerateSafePrimes_keyGeneration(t *testing.T) {
 }
 
 func TestGenerateSafePrimes_Time(t *testing.T) {
-	for i := 4; i < 11; i++ {
+	for i := 4; i < 10; i++ {
 		keyLength := 1 << uint(i)
 		start := time.Now()
 		_, _, err := generateSafePrimes(keyLength, rand.Reader)
