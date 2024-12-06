@@ -41,6 +41,10 @@ func (sgp *GermainSafePrime) Validate() bool {
 		probablyPrime(sgp.p)
 }
 
+func (sgp *GermainSafePrime) ValidateWithPoseidon() bool {
+	return sgp.Validate() && ValidatePrimeWithPoseidon(sgp.q) && ValidatePrimeWithPoseidon(sgp.p)
+}
+
 // ----- //
 
 func getSafePrime(p *big.Int) *big.Int {
@@ -346,4 +350,17 @@ func isPrimeCandidate(number *big.Int) bool {
 		}
 	}
 	return true
+}
+
+func ValidatePrimeWithPoseidon(prime *big.Int) bool {
+	if prime == nil {
+		return false
+	}
+	// Hash the prime using Poseidon
+	hash, err := PoseidonHashInt(prime)
+	if err != nil {
+		return false
+	}
+	// Ensure the hash is non-zero
+	return hash.BitLen() > 0
 }

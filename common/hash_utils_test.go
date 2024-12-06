@@ -15,6 +15,24 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/common"
 )
 
+func TestRejectionSampleWithPoseidon(t *testing.T) {
+	curveQ := common.GetRandomPrimeInt(rand.Reader, 256)
+
+	inputs := []*big.Int{
+		big.NewInt(1),
+		big.NewInt(2),
+		big.NewInt(3),
+	}
+	rs, err := common.RejectionSampleWithPoseidon(curveQ, inputs)
+	if err != nil {
+		t.Fatalf("Failed to compute Poseidon-based RejectionSample: %v", err)
+	}
+
+	if rs.BitLen() > curveQ.BitLen() {
+		t.Errorf("RejectionSampleWithPoseidon() = bitlen %d, expected <= %d", rs.BitLen(), curveQ.BitLen())
+	}
+}
+
 func TestRejectionSample(t *testing.T) {
 	curveQ := common.GetRandomPrimeInt(rand.Reader, 256)
 	randomQ := common.MustGetRandomInt(rand.Reader, 64)

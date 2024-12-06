@@ -69,3 +69,11 @@ func AppendBigIntToBytesSlice(commonBytes []byte, appended *big.Int) []byte {
 	resultBytes = append(resultBytes, appended.Bytes()...)
 	return resultBytes
 }
+
+func PreparePoseidonInputs(inputs ...*big.Int) [][]byte {
+	prepared := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		prepared[i] = input.Bytes()
+	}
+	return prepared
+}

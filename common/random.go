@@ -128,3 +128,36 @@ func GetRandomBytes(rand io.Reader, length int) ([]byte, error) {
 
 	return buf, nil
 }
+
+// GetRandomBigIntSlice generates a slice of random big.Int values for Poseidon hash inputs.
+func GetRandomBigIntSlice(rand io.Reader, count, bitLen int) ([]*big.Int, error) {
+	if count <= 0 || bitLen <= 0 {
+		return nil, errors.New("invalid count or bit length")
+	}
+
+	result := make([]*big.Int, count)
+	for i := 0; i < count; i++ {
+		randInt := MustGetRandomInt(rand, bitLen)
+		result[i] = randInt
+	}
+
+	return result, nil
+}
+
+// GetRandomPoseidonInputs generates random inputs formatted for Poseidon hash.
+func GetRandomPoseidonInputs(rand io.Reader, count, byteLength int) ([][]byte, error) {
+	if count <= 0 || byteLength <= 0 {
+		return nil, errors.New("invalid count or byte length")
+	}
+
+	result := make([][]byte, count)
+	for i := 0; i < count; i++ {
+		randBytes, err := GetRandomBytes(rand, byteLength)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = randBytes
+	}
+
+	return result, nil
+}

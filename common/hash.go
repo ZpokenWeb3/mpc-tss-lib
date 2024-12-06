@@ -11,6 +11,8 @@ import (
 	_ "crypto/sha512"
 	"encoding/binary"
 	"math/big"
+
+	"github.com/iden3/go-iden3-crypto/poseidon"
 )
 
 const (
@@ -153,4 +155,38 @@ func SHA512_256iOne(in *big.Int) *big.Int {
 		return nil
 	}
 	return new(big.Int).SetBytes(state.Sum(nil))
+}
+
+// PoseidonHash computes the Poseidon hash for byte slices
+func PoseidonHash(inputs ...[]byte) ([]byte, error) {
+	var bigInputs []*big.Int
+	for _, input := range inputs {
+		bigInputs = append(bigInputs, new(big.Int).SetBytes(input))
+	}
+	hash, err := poseidon.Hash(bigInputs)
+	if err != nil {
+		return nil, err
+	}
+	return hash.Bytes(), nil
+}
+
+// PoseidonHashInt computes the Poseidon hash for big.Int slices
+func PoseidonHashInt(inputs ...*big.Int) (*big.Int, error) {
+	hash, err := poseidon.Hash(inputs)
+	if err != nil {
+		return nil, err
+	}
+	return hash, nil
+}
+
+// PoseidonHashTagged computes a Poseidon hash with a tag
+func PoseidonHashTagged(tag []byte, inputs ...*big.Int) (*big.Int, error) {
+	tagHash, err := PoseidonHash(tag)
+	if err != nil {
+		return nil, err
+	}
+	tagBig := new(big.Int).SetBytes(tagHash)
+
+	allInputs := append([]*big.Int{tagBig, tagBig}, inputs...)
+	return poseidon.Hash(allInputs)
 }
