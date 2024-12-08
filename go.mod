@@ -20,9 +20,12 @@ require (
 require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dchest/blake512 v1.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/iden3/go-iden3-crypto v0.0.17 // indirect
+	// github.com/EkaterynaKuznetsova/go-iden3-crypto
 	github.com/ipfs/go-log/v2 v2.1.3 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -34,3 +37,4 @@ require (
 )
 
 replace github.com/agl/ed25519 => github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43
+replace github.com/iden3/go-iden3-crypto => ../go-iden3-crypto

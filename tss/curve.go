@@ -11,6 +11,7 @@ import (
 	"errors"
 	"reflect"
 
+	"github.com/bnb-chain/tss-lib/v2/babyjubjub"
 	s256k1 "github.com/btcsuite/btcd/btcec/v2"
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 )
@@ -20,6 +21,7 @@ type CurveName string
 const (
 	Secp256k1 CurveName = "secp256k1"
 	Ed25519   CurveName = "ed25519"
+	BabyJub   CurveName = "babyjubjub"
 )
 
 var (
@@ -34,6 +36,7 @@ func init() {
 	registry = make(map[CurveName]elliptic.Curve)
 	registry[Secp256k1] = s256k1.S256()
 	registry[Ed25519] = edwards.Edwards()
+	registry[BabyJub] = babyjubjub.BabyJubJub()
 }
 
 func RegisterCurve(name CurveName, curve elliptic.Curve) {
@@ -90,6 +93,12 @@ func S256() elliptic.Curve {
 	return s256k1.S256()
 }
 
+// Ed25519
 func Edwards() elliptic.Curve {
 	return edwards.Edwards()
+}
+
+// Baby JubJub
+func BabyJubJub() elliptic.Curve {
+	return babyjubjub.BabyJubJub()
 }

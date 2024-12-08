@@ -59,6 +59,44 @@ func CheckIndexes(ec elliptic.Curve, indexes []*big.Int) ([]*big.Int, error) {
 
 // Returns a new array of secret shares created by Shamir's Secret Sharing Algorithm,
 // requiring a minimum number of shares to recreate, of length shares, from the input secret
+func CreateBJJ(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.Int, rand io.Reader) (Vs, Shares, error) {
+	if secret == nil || indexes == nil {
+		return nil, nil, fmt.Errorf("vss secret or indexes == nil: %v %v", secret, indexes)
+	}
+	if threshold < 1 {
+		return nil, nil, errors.New("vss threshold < 1")
+	}
+
+	ids, err := CheckIndexes(ec, indexes)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	num := len(indexes)
+	if num < threshold {
+		return nil, nil, ErrNumSharesBelowThreshold
+	}
+
+	poly := samplePolynomial(ec, threshold, secret, rand)
+
+	v := make(Vs, len(poly))
+	for i, ai := range poly {
+		fmt.Printf("\n\t\ti: %d ai %d\n\n", i, ai)
+		v[i] = crypto.ScalarBaseMultBJJ(ec, ai)
+	}
+
+	fmt.Println("Create END")
+
+	shares := make(Shares, num)
+	for i := 0; i < num; i++ {
+		share := evaluatePolynomial(ec, threshold, poly, ids[i])
+		shares[i] = &Share{Threshold: threshold, ID: ids[i], Share: share}
+	}
+	return v, shares, nil
+}
+
+// Returns a new array of secret shares created by Shamir's Secret Sharing Algorithm,
+// requiring a minimum number of shares to recreate, of length shares, from the input secret
 func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.Int, rand io.Reader) (Vs, Shares, error) {
 	if secret == nil || indexes == nil {
 		return nil, nil, fmt.Errorf("vss secret or indexes == nil: %v %v", secret, indexes)
@@ -81,8 +119,11 @@ func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.In
 
 	v := make(Vs, len(poly))
 	for i, ai := range poly {
+		fmt.Printf("\n\t\ti: %d ai %d\n\n", i, ai)
 		v[i] = crypto.ScalarBaseMult(ec, ai)
 	}
+
+	fmt.Println("Create END")
 
 	shares := make(Shares, num)
 	for i := 0; i < num; i++ {

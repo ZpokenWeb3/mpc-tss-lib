@@ -19,6 +19,8 @@ import (
 	"github.com/decred/dcrd/dcrec/edwards/v2"
 
 	"github.com/bnb-chain/tss-lib/v2/tss"
+
+	iden3bjj "github.com/iden3/go-iden3-crypto/babyjub"
 )
 
 // ECPoint convenience helper
@@ -33,8 +35,26 @@ var (
 )
 
 // Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
+func NewECPointBJJ(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
+	a := iden3bjj.NewPoint()
+	a.X = X
+	a.Y = Y
+	if !a.InCurve() {
+		return nil, fmt.Errorf("BJJ NewECPoint: the given point is not on the elliptic curve")
+	}
+	return &ECPoint{curve, [2]*big.Int{X, Y}}, nil
+}
+
+// Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
 func NewECPoint(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
 	if !isOnCurve(curve, X, Y) {
+		fmt.Printf("\n Curve %d\n", curve.Params().P)
+		fmt.Printf("\n Curve %d\n", curve.Params().N)
+		fmt.Printf("\n Curve %d\n", curve.Params().B)
+		fmt.Printf("\n Curve %d\n", curve.Params().Gx)
+		fmt.Printf("\n Curve %d\n", curve.Params().Gy)
+		fmt.Printf("\n Curve on  %t\n", curve.IsOnCurve(curve.Params().Gx, curve.Params().Gy))
+
 		return nil, fmt.Errorf("NewECPoint: the given point is not on the elliptic curve")
 	}
 	return &ECPoint{curve, [2]*big.Int{X, Y}}, nil
@@ -104,9 +124,25 @@ func (p *ECPoint) EightInvEight() *ECPoint {
 	return p.ScalarMult(eight).ScalarMult(eightInv)
 }
 
+func ScalarBaseMultBJJ(curve elliptic.Curve, k *big.Int) *ECPoint {
+	k = k.Mod(k, curve.Params().N)
+	a := iden3bjj.B8.Mul(k, iden3bjj.B8)
+	b := a.InCurve()
+	fmt.Printf("\n\t BJJ ScalarBaseMult x: %d, y: %d\ncurveP %d\n N %d\n B %d\n K %d\n b %t\n", a.X, a.Y, curve.Params().P, curve.Params().N, curve.Params().B, k, b)
+	p, err := NewECPointBJJ(curve, a.X, a.Y) // it must be on the curve, no need to check.
+	if err != nil {
+		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
+	}
+	return p
+}
+
 func ScalarBaseMult(curve elliptic.Curve, k *big.Int) *ECPoint {
+	k = k.Mod(k, curve.Params().N)
 	x, y := curve.ScalarBaseMult(k.Bytes())
-	p, err := NewECPoint(curve, x, y) // it must be on the curve, no need to check.
+	a := iden3bjj.B8.Mul(k, iden3bjj.B8)
+	b := curve.IsOnCurve(a.X, a.Y)
+	fmt.Printf("\n\ttScalarBaseMult x: %d, y: %d\ncurveP %d\n N %d\n B %d\n K %d\n b %t\n", x, y, curve.Params().P, curve.Params().N, curve.Params().B, k, b)
+	p, err := NewECPoint(curve, a.X, a.Y) // it must be on the curve, no need to check.
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
 	}
@@ -115,6 +151,7 @@ func ScalarBaseMult(curve elliptic.Curve, k *big.Int) *ECPoint {
 
 func isOnCurve(c elliptic.Curve, x, y *big.Int) bool {
 	if x == nil || y == nil {
+		fmt.Println("x == nil || y == nil ")
 		return false
 	}
 	return c.IsOnCurve(x, y)
