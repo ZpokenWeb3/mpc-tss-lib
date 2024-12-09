@@ -8,6 +8,7 @@ package keygen
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
@@ -50,7 +51,8 @@ func (round *round1) Start() *tss.Error {
 
 	// 2. compute the vss shares
 	ids := round.Parties().IDs().Keys()
-	vs, shares, err := vss.Create(round.EC(), round.Threshold(), ui, ids, round.Rand())
+	fmt.Printf("\n ROUND1 \n")
+	vs, shares, err := vss.CreateBJJ(round.EC(), round.Threshold(), ui, ids, round.Rand())
 	if err != nil {
 		return round.WrapError(err, Pi)
 	}

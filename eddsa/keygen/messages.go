@@ -111,6 +111,19 @@ func (m *KGRound2Message2) UnmarshalDeCommitment() []*big.Int {
 	return cmt.NewHashDeCommitmentFromBytes(deComBzs)
 }
 
+func (m *KGRound2Message2) UnmarshalZKProofBJJ(ec elliptic.Curve) (*schnorr.ZKProof, error) {
+	point, err := crypto.NewECPointBJJ(ec,
+		new(big.Int).SetBytes(m.GetProofAlphaX()),
+		new(big.Int).SetBytes(m.GetProofAlphaY()))
+	if err != nil {
+		return nil, err
+	}
+	return &schnorr.ZKProof{
+		Alpha: point,
+		T:     new(big.Int).SetBytes(m.GetProofT()),
+	}, nil
+}
+
 func (m *KGRound2Message2) UnmarshalZKProof(ec elliptic.Curve) (*schnorr.ZKProof, error) {
 	point, err := crypto.NewECPoint(
 		ec,

@@ -8,6 +8,7 @@ package schnorr
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 
@@ -28,7 +29,34 @@ type (
 )
 
 // NewZKProof constructs a new Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16)
+func NewZKProofBJJ(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader) (*ZKProof, error) {
+	// fmt.Printf("\n NewZKProof: x %d, X %d, rand %d\n", x, X, rand)
+	// if x == nil || X == nil || !X.ValidateBasic() {
+	if !X.ValidateBasicBJJ() {
+		return nil, errors.New("BJJ ZKProof constructor received nil or invalid value(s)")
+	}
+	ec := X.Curve()
+	ecParams := ec.Params()
+	q := ecParams.N
+	g := crypto.NewECPointNoCurveCheck(ec, ecParams.Gx, ecParams.Gy) // already on the curve.
+
+	a := common.GetRandomPositiveInt(rand, q)
+	alpha := crypto.ScalarBaseMultBJJ(ec, a)
+
+	var c *big.Int
+	{
+		cHash := common.SHA512_256i_TAGGED(Session, X.X(), X.Y(), g.X(), g.Y(), alpha.X(), alpha.Y())
+		c = common.RejectionSample(q, cHash)
+	}
+	t := new(big.Int).Mul(c, x)
+	t = common.ModInt(q).Add(a, t)
+
+	return &ZKProof{Alpha: alpha, T: t}, nil
+}
+
+// NewZKProof constructs a new Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16)
 func NewZKProof(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader) (*ZKProof, error) {
+	fmt.Printf("\n NewZKProof: x %d, X %d, rand %d\n", x, X, rand)
 	if x == nil || X == nil || !X.ValidateBasic() {
 		return nil, errors.New("ZKProof constructor received nil or invalid value(s)")
 	}

@@ -8,6 +8,7 @@ package keygen
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/hashicorp/go-multierror"
@@ -89,7 +90,7 @@ func (round *round3) Start() *tss.Error {
 				ch <- vssOut{err, nil}
 				return
 			}
-			proof, err := r2msg2.UnmarshalZKProof(round.Params().EC())
+			proof, err := r2msg2.UnmarshalZKProofBJJ(round.Params().EC())
 			if err != nil {
 				ch <- vssOut{errors.New("failed to unmarshal schnorr proof"), nil}
 				return
@@ -125,6 +126,8 @@ func (round *round3) Start() *tss.Error {
 			vssResults[j] = <-chs[j]
 			// collect culprits to error out with
 			if err := vssResults[j].unWrappedErr; err != nil {
+				fmt.Printf("\n ROUND 3 \n")
+
 				culprits = append(culprits, Pj)
 			}
 		}
@@ -136,8 +139,10 @@ func (round *round3) Start() *tss.Error {
 				}
 			}
 			return round.WrapError(multiErr, culprits...)
+
 		}
 	}
+
 	{
 		var err error
 		culprits := make([]*tss.PartyID, 0, len(Ps)) // who caused the error(s)
@@ -186,7 +191,7 @@ func (round *round3) Start() *tss.Error {
 	}
 
 	// 18. compute and SAVE the EDDSA public key `y`
-	eddsaPubKey, err := crypto.NewECPoint(round.Params().EC(), Vc[0].X(), Vc[0].Y())
+	eddsaPubKey, err := crypto.NewECPointBJJ(round.Params().EC(), Vc[0].X(), Vc[0].Y())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "public key is not on the curve"))
 	}

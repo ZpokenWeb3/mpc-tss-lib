@@ -48,13 +48,6 @@ func NewECPointBJJ(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
 // Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
 func NewECPoint(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
 	if !isOnCurve(curve, X, Y) {
-		fmt.Printf("\n Curve %d\n", curve.Params().P)
-		fmt.Printf("\n Curve %d\n", curve.Params().N)
-		fmt.Printf("\n Curve %d\n", curve.Params().B)
-		fmt.Printf("\n Curve %d\n", curve.Params().Gx)
-		fmt.Printf("\n Curve %d\n", curve.Params().Gy)
-		fmt.Printf("\n Curve on  %t\n", curve.IsOnCurve(curve.Params().Gx, curve.Params().Gy))
-
 		return nil, fmt.Errorf("NewECPoint: the given point is not on the elliptic curve")
 	}
 	return &ECPoint{curve, [2]*big.Int{X, Y}}, nil
@@ -116,6 +109,15 @@ func (p *ECPoint) SetCurve(curve elliptic.Curve) *ECPoint {
 	return p
 }
 
+func (p *ECPoint) ValidateBasicBJJ() bool {
+	a := iden3bjj.NewPoint()
+	a.X = p.X()
+	a.Y = p.Y()
+	// b := a.InCurve()
+	// fmt.Printf("\n ValidateBasicBJJ %t pcord %d p.IsOnCurve() %t another %t %t\n", (p != nil), p.coords[0], (p.coords[1] != nil && p.IsOnCurve()), b)
+	return p != nil && p.coords[0] != nil && p.coords[1] != nil && a.InCurve()
+}
+
 func (p *ECPoint) ValidateBasic() bool {
 	return p != nil && p.coords[0] != nil && p.coords[1] != nil && p.IsOnCurve()
 }
@@ -127,8 +129,8 @@ func (p *ECPoint) EightInvEight() *ECPoint {
 func ScalarBaseMultBJJ(curve elliptic.Curve, k *big.Int) *ECPoint {
 	k = k.Mod(k, curve.Params().N)
 	a := iden3bjj.B8.Mul(k, iden3bjj.B8)
-	b := a.InCurve()
-	fmt.Printf("\n\t BJJ ScalarBaseMult x: %d, y: %d\ncurveP %d\n N %d\n B %d\n K %d\n b %t\n", a.X, a.Y, curve.Params().P, curve.Params().N, curve.Params().B, k, b)
+	// b := a.InCurve()
+	// fmt.Printf("\n\t BJJ ScalarBaseMult x: %d, y: %d\ncurveP %d\n N %d\n B %d\n K %d\n b %t\n", a.X, a.Y, curve.Params().P, curve.Params().N, curve.Params().B, k, b)
 	p, err := NewECPointBJJ(curve, a.X, a.Y) // it must be on the curve, no need to check.
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
