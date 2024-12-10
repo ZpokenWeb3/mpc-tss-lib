@@ -72,7 +72,6 @@ func (round *round3) Start() *tss.Error {
 		go func(j int, ch chan<- vssOut) {
 			// 4-10.
 			KGCj := round.temp.KGCs[j]
-			fmt.Printf("\n ROUND 3  KGCJ %v \n", KGCj)
 			r2msg2 := round.temp.kgRound2Message2s[j].Content().(*KGRound2Message2)
 			KGDj := r2msg2.UnmarshalDeCommitment()
 			cmtDeCmt := commitments.HashCommitDecommit{C: KGCj, D: KGDj}

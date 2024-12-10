@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
@@ -86,7 +87,7 @@ func TestCreateBJJ(t *testing.T) {
 		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, ec.Params().N))
 	}
 
-	vs, _, err := CreateBJJ(ec, threshold, secret, ids, rand.Reader)
+	vs, _, err := Create(ec, threshold, secret, ids, rand.Reader)
 	assert.Nil(t, err)
 
 	assert.Equal(t, threshold+1, len(vs))
@@ -133,7 +134,7 @@ func TestVerifyBJJ(t *testing.T) {
 		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, ec.Params().N))
 	}
 
-	vs, shares, err := CreateBJJ(ec, threshold, secret, ids, rand.Reader)
+	vs, shares, err := Create(ec, threshold, secret, ids, rand.Reader)
 	assert.NoError(t, err)
 
 	for i := 0; i < num; i++ {
@@ -153,17 +154,17 @@ func TestReconstruct(t *testing.T) {
 	_, shares, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
 	assert.NoError(t, err)
 
-	// secret2, err2 := shares[:threshold-1].ReConstruct(tss.EC())
-	// assert.Error(t, err2) // not enough shares to satisfy the threshold
-	// assert.Nil(t, secret2)
+	secret2, err2 := shares[:threshold-1].ReConstruct(tss.EC())
+	assert.Error(t, err2) // not enough shares to satisfy the threshold
+	assert.Nil(t, secret2)
 
 	secret3, err3 := shares[:threshold].ReConstruct(tss.EC())
 	assert.NoError(t, err3)
 	assert.NotZero(t, secret3)
 
-	// secret4, err4 := shares[:num].ReConstruct(tss.EC())
-	// assert.NoError(t, err4)
-	// assert.NotZero(t, secret4)
+	secret4, err4 := shares[:num].ReConstruct(tss.EC())
+	assert.NoError(t, err4)
+	assert.NotZero(t, secret4)
 }
 
 func TestReconstructBJJ(t *testing.T) {
@@ -180,15 +181,33 @@ func TestReconstructBJJ(t *testing.T) {
 	_, shares, err := Create(ec, threshold, secret, ids, rand.Reader)
 	assert.NoError(t, err)
 
-	// secret2, err2 := shares[:threshold-1].ReConstruct(ec)
-	// assert.Error(t, err2) // not enough shares to satisfy the threshold
-	// assert.Nil(t, secret2)
-	// fmt.Printf("\n Shares: %v\n", shares)
+	secret2, err2 := shares[:threshold-1].ReConstruct(ec)
+	assert.Error(t, err2) // not enough shares to satisfy the threshold
+	assert.Nil(t, secret2)
+
 	secret3, err3 := shares[:threshold].ReConstruct(ec)
 	assert.NoError(t, err3)
 	assert.NotZero(t, secret3)
 
-	// secret4, err4 := shares[:num].ReConstruct(ec)
-	// assert.NoError(t, err4)
-	// assert.NotZero(t, secret4)
+	secret4, err4 := shares[:num].ReConstruct(ec)
+	assert.NoError(t, err4)
+	assert.NotZero(t, secret4)
+}
+
+// NewIntFromString creates a new big.Int from a decimal integer encoded as a
+// string.  It will panic if the string is not a decimal integer.
+func NewIntFromString(s string) *big.Int {
+	v, ok := new(big.Int).SetString(s, 10) //nolint:gomnd
+	if !ok {
+		panic(fmt.Sprintf("Bad base 10 string %s", s))
+	}
+	return v
+}
+
+func TestMul(t *testing.T) {
+	ec := tss.BabyJubJub()
+	g := crypto.NewECPointNoCurveCheck(ec, ec.Params().Gx, ec.Params().Gy)
+	c := NewIntFromString("2736030358979909402780800718157159386076813972158567259200215660948447373041")
+	a := g.ScalarMult(c)
+	fmt.Printf("Point: (%v, %v)\n", a.X(), a.Y())
 }

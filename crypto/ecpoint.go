@@ -16,11 +16,8 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/decred/dcrd/dcrec/edwards/v2"
-
-	"github.com/bnb-chain/tss-lib/v2/tss"
-
 	"github.com/bnb-chain/tss-lib/v2/babyjubjub"
+	"github.com/bnb-chain/tss-lib/v2/tss"
 	iden3bjj "github.com/iden3/go-iden3-crypto/babyjub"
 )
 
@@ -31,8 +28,7 @@ type ECPoint struct {
 }
 
 var (
-	eight    = big.NewInt(8)
-	eightInv = new(big.Int).ModInverse(eight, edwards.Edwards().Params().N)
+	eight = big.NewInt(8)
 )
 
 // // Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
@@ -141,6 +137,7 @@ func (p *ECPoint) ValidateBasic() bool {
 }
 
 func (p *ECPoint) EightInvEight() *ECPoint {
+	eightInv := new(big.Int).ModInverse(eight, p.curve.Params().N)
 	return p.ScalarMult(eight).ScalarMult(eightInv)
 }
 

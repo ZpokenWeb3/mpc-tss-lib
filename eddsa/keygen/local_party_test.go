@@ -217,6 +217,7 @@ func tryWriteTestFixtureFile(t *testing.T, index int, data LocalPartySaveData) {
 	// fixture file does not already exist?
 	// if it does, we won't re-create it here
 	fi, err := os.Stat(fixtureFileName)
+	fmt.Printf("\n Filepath %v \n", fixtureFileName)
 	if !(err == nil && fi != nil && !fi.IsDir()) {
 		fd, err := os.OpenFile(fixtureFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
