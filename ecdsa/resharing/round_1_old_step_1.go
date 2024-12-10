@@ -41,7 +41,7 @@ func (round *round1) Start() *tss.Error {
 	round.allOldOK()
 
 	round.temp.ssidNonce = new(big.Int).SetUint64(uint64(0))
-	ssid, err := round.getSSID()
+	ssid, err := round.getSSID(true)
 	if err != nil {
 		return round.WrapError(err)
 	}

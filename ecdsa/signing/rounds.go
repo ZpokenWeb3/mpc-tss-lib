@@ -8,10 +8,12 @@ package signing
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
@@ -126,21 +128,64 @@ func (round *base) resetOK() {
 	}
 }
 
-// get ssid from local params
+// Define the field modulus explicitly (example for BN254; replace with actual value if different)
+var fieldModulus = new(big.Int).SetBytes([]byte{
+	0x24, 0x03, 0x4b, 0x62, 0xb0, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00,
+	0xa8, 0x00, 0x00, 0x00, 0x01, 0xd8, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x00,
+	0x00, 0x3b, 0x00, 0x00, 0x00, 0x01,
+})
+
 func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
-	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                                                // parties
+	ssidList := []*big.Int{
+		round.EC().Params().P, round.EC().Params().N, round.EC().Params().B,
+		round.EC().Params().Gx, round.EC().Params().Gy, // EC curve
+	}
+	ssidList = append(ssidList, round.Parties().IDs().Keys()...) // Parties
 	BigXjList, err := crypto.FlattenECPoints(round.key.BigXj)
 	if err != nil {
 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
 	}
-	ssidList = append(ssidList, BigXjList...)                    // BigXj
-	ssidList = append(ssidList, round.key.NTildej...)            // NTilde
-	ssidList = append(ssidList, round.key.H1j...)                // h1
-	ssidList = append(ssidList, round.key.H2j...)                // h2
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, BigXjList...) // BigXj
+	ssidList = append(ssidList, round.key.NTildej...)
+	ssidList = append(ssidList, round.key.H1j...)
+	ssidList = append(ssidList, round.key.H2j...)
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))
 	ssidList = append(ssidList, round.temp.ssidNonce)
-	ssid := common.SHA512_256i(ssidList...).Bytes()
 
-	return ssid, nil
+	// Validate and reduce inputs modulo the field modulus
+	validatedInputs := []*big.Int{}
+	for _, item := range ssidList {
+		// Ensure the input is non-negative and within the field range
+		reduced := new(big.Int).Mod(item, fieldModulus)
+		if reduced.Sign() < 0 {
+			reduced.Add(reduced, fieldModulus)
+		}
+		validatedInputs = append(validatedInputs, reduced)
+	}
+
+	// Batching inputs for Poseidon
+	const maxInputs = 16
+	chunkedHashes := []*big.Int{}
+	for i := 0; i < len(validatedInputs); i += maxInputs {
+		end := i + maxInputs
+		if end > len(validatedInputs) {
+			end = len(validatedInputs)
+		}
+
+		// Hash each chunk separately
+		chunk := validatedInputs[i:end]
+		chunkHash, err := poseidon.Hash(chunk)
+		if err != nil {
+			return nil, round.WrapError(fmt.Errorf("Poseidon hashing for chunk failed: %w", err), round.PartyID())
+		}
+		chunkedHashes = append(chunkedHashes, chunkHash)
+	}
+
+	// Final hash from all chunked hashes
+	finalHash, err := poseidon.Hash(chunkedHashes)
+	if err != nil {
+		return nil, round.WrapError(fmt.Errorf("Poseidon final hashing failed: %w", err), round.PartyID())
+	}
+
+	return finalHash.Bytes(), nil
 }

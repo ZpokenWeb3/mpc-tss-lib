@@ -106,7 +106,7 @@ func (round *round1) Start() *tss.Error {
 	round.temp.ssidNonce = new(big.Int).SetUint64(0)
 	round.save.ShareID = ids[i]
 	round.temp.vs = vs
-	ssid, err := round.getSSID()
+	ssid, err := round.getSSID(true)
 	if err != nil {
 		return round.WrapError(errors.New("failed to generate ssid"))
 	}

@@ -7,7 +7,10 @@
 package keygen
 
 import (
+	"fmt"
 	"math/big"
+
+	"github.com/iden3/go-iden3-crypto/poseidon"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/tss"
@@ -99,12 +102,32 @@ func (round *base) resetOK() {
 }
 
 // get ssid from local params
-func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
+func (round *base) getSSID(usePoseidon bool) ([]byte, error) {
+	ssidList := []*big.Int{
+		round.EC().Params().P,
+		round.EC().Params().N,
+		round.EC().Params().Gx,
+		round.EC().Params().Gy,
+	}
 	ssidList = append(ssidList, round.Parties().IDs().Keys()...)
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))
 	ssidList = append(ssidList, round.temp.ssidNonce)
-	ssid := common.SHA512_256i(ssidList...).Bytes()
 
+	if usePoseidon {
+		poseidonPrime, success := new(big.Int).SetString("21888242871839275222246405745257275088548364400416034343698204186575808495617", 10)
+		if !success {
+			return nil, fmt.Errorf("failed to parse Poseidon prime")
+		}
+		for i, input := range ssidList {
+			ssidList[i] = new(big.Int).Mod(input, poseidonPrime)
+		}
+
+		ssidHash, err := poseidon.Hash(ssidList)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compute Poseidon hash for SSID: %w", err)
+		}
+		return ssidHash.Bytes(), nil
+	}
+	ssid := common.SHA512_256i(ssidList...).Bytes()
 	return ssid, nil
 }

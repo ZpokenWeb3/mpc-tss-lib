@@ -8,10 +8,12 @@ package resharing
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/ecdsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
@@ -138,22 +140,72 @@ func (round *base) allNewOK() {
 		round.newOK[j] = true
 	}
 }
+func hashWithPoseidon(inputs []*big.Int) ([]byte, error) {
+	const maxInputs = 16
+	var hashes []*big.Int
 
-// get ssid from local params
-func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().B, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
-	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                                                // parties
+	for i := 0; i < len(inputs); i += maxInputs {
+		end := i + maxInputs
+		if end > len(inputs) {
+			end = len(inputs)
+		}
+		chunk := inputs[i:end]
+		fmt.Printf("Hashing chunk: %v\n", chunk) // Debug log
+		chunkHash, err := poseidon.Hash(chunk)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hash chunk %d-%d: %w", i, end, err)
+		}
+		fmt.Printf("Chunk hash: %v\n", chunkHash) // Debug log
+		hashes = append(hashes, chunkHash)
+	}
+
+	finalHash, err := poseidon.Hash(hashes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash final hashes: %w", err)
+	}
+	fmt.Printf("Final hash: %v\n", finalHash) // Debug log
+	return finalHash.Bytes(), nil
+}
+
+func (round *base) getSSID(usePoseidon bool) ([]byte, error) {
+	ssidList := []*big.Int{
+		round.EC().Params().P,
+		round.EC().Params().N,
+		round.EC().Params().B,
+		round.EC().Params().Gx,
+		round.EC().Params().Gy,
+	}
+	ssidList = append(ssidList, round.Parties().IDs().Keys()...)
 	BigXjList, err := crypto.FlattenECPoints(round.input.BigXj)
 	if err != nil {
 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
 	}
-	ssidList = append(ssidList, BigXjList...)                    // BigXj
-	ssidList = append(ssidList, round.input.NTildej...)          // NTilde
-	ssidList = append(ssidList, round.input.H1j...)              // h1
-	ssidList = append(ssidList, round.input.H2j...)              // h2
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, BigXjList...)
+	ssidList = append(ssidList, round.input.NTildej...)
+	ssidList = append(ssidList, round.input.H1j...)
+	ssidList = append(ssidList, round.input.H2j...)
+	ssidList = append(ssidList, big.NewInt(int64(round.number)))
 	ssidList = append(ssidList, round.temp.ssidNonce)
-	ssid := common.SHA512_256i(ssidList...).Bytes()
 
+	if usePoseidon {
+		// Reduce inputs modulo Poseidon prime
+		poseidonPrime, success := new(big.Int).SetString("21888242871839275222246405745257275088548364400416034343698204186575808495617", 10)
+		if !success {
+			return nil, errors.New("failed to parse Poseidon prime")
+		}
+		for i, input := range ssidList {
+			ssidList[i] = new(big.Int).Mod(input, poseidonPrime)
+		}
+
+		// Hash with Poseidon in chunks
+		ssidHash, err := hashWithPoseidon(ssidList)
+		if err != nil {
+			return nil, round.WrapError(errors.New("Poseidon hash computation failed"), round.PartyID())
+		}
+		return ssidHash, nil
+	}
+
+	// Fallback to SHA-512/256
+	ssid := common.SHA512_256i(ssidList...).Bytes()
 	return ssid, nil
 }
