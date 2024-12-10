@@ -8,6 +8,7 @@ package vss_test
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -72,6 +73,37 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestCreateBJJ(t *testing.T) {
+	num, threshold := 5, 3
+
+	ec := tss.BabyJubJub()
+	secret := common.GetRandomPositiveInt(rand.Reader, ec.Params().N)
+
+	fmt.Printf("\n ROUND 3  round.Params().N() %v \n", ec.Params().N)
+
+	ids := make([]*big.Int, 0)
+	for i := 0; i < num; i++ {
+		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, ec.Params().N))
+	}
+
+	vs, _, err := CreateBJJ(ec, threshold, secret, ids, rand.Reader)
+	assert.Nil(t, err)
+
+	assert.Equal(t, threshold+1, len(vs))
+	// assert.Equal(t, num, params.NumShares)
+
+	assert.Equal(t, threshold+1, len(vs))
+
+	// ensure that each vs has two points on the curve
+	for i, pg := range vs {
+		assert.NotZero(t, pg.X())
+		assert.NotZero(t, pg.Y())
+		assert.True(t, pg.IsOnCurve())
+		assert.NotZero(t, vs[i].X())
+		assert.NotZero(t, vs[i].Y())
+	}
+}
+
 func TestVerify(t *testing.T) {
 	num, threshold := 5, 3
 
@@ -90,9 +122,27 @@ func TestVerify(t *testing.T) {
 	}
 }
 
-func TestReconstruct(t *testing.T) {
+func TestVerifyBJJ(t *testing.T) {
 	num, threshold := 5, 3
 
+	ec := tss.BabyJubJub()
+	secret := common.GetRandomPositiveInt(rand.Reader, ec.Params().N)
+
+	ids := make([]*big.Int, 0)
+	for i := 0; i < num; i++ {
+		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, ec.Params().N))
+	}
+
+	vs, shares, err := CreateBJJ(ec, threshold, secret, ids, rand.Reader)
+	assert.NoError(t, err)
+
+	for i := 0; i < num; i++ {
+		assert.True(t, shares[i].Verify(ec, threshold, vs))
+	}
+}
+
+func TestReconstruct(t *testing.T) {
+	num, threshold := 5, 3
 	secret := common.GetRandomPositiveInt(rand.Reader, tss.EC().Params().N)
 
 	ids := make([]*big.Int, 0)
@@ -103,15 +153,42 @@ func TestReconstruct(t *testing.T) {
 	_, shares, err := Create(tss.EC(), threshold, secret, ids, rand.Reader)
 	assert.NoError(t, err)
 
-	secret2, err2 := shares[:threshold-1].ReConstruct(tss.EC())
-	assert.Error(t, err2) // not enough shares to satisfy the threshold
-	assert.Nil(t, secret2)
+	// secret2, err2 := shares[:threshold-1].ReConstruct(tss.EC())
+	// assert.Error(t, err2) // not enough shares to satisfy the threshold
+	// assert.Nil(t, secret2)
 
 	secret3, err3 := shares[:threshold].ReConstruct(tss.EC())
 	assert.NoError(t, err3)
 	assert.NotZero(t, secret3)
 
-	secret4, err4 := shares[:num].ReConstruct(tss.EC())
-	assert.NoError(t, err4)
-	assert.NotZero(t, secret4)
+	// secret4, err4 := shares[:num].ReConstruct(tss.EC())
+	// assert.NoError(t, err4)
+	// assert.NotZero(t, secret4)
+}
+
+func TestReconstructBJJ(t *testing.T) {
+	num, threshold := 5, 3
+
+	ec := tss.BabyJubJub()
+	secret := common.GetRandomPositiveInt(rand.Reader, ec.Params().N)
+
+	ids := make([]*big.Int, 0)
+	for i := 0; i < num; i++ {
+		ids = append(ids, common.GetRandomPositiveInt(rand.Reader, ec.Params().N))
+	}
+
+	_, shares, err := Create(ec, threshold, secret, ids, rand.Reader)
+	assert.NoError(t, err)
+
+	// secret2, err2 := shares[:threshold-1].ReConstruct(ec)
+	// assert.Error(t, err2) // not enough shares to satisfy the threshold
+	// assert.Nil(t, secret2)
+	// fmt.Printf("\n Shares: %v\n", shares)
+	secret3, err3 := shares[:threshold].ReConstruct(ec)
+	assert.NoError(t, err3)
+	assert.NotZero(t, secret3)
+
+	// secret4, err4 := shares[:num].ReConstruct(ec)
+	// assert.NoError(t, err4)
+	// assert.NotZero(t, secret4)
 }

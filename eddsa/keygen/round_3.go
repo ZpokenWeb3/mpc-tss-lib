@@ -72,6 +72,7 @@ func (round *round3) Start() *tss.Error {
 		go func(j int, ch chan<- vssOut) {
 			// 4-10.
 			KGCj := round.temp.KGCs[j]
+			fmt.Printf("\n ROUND 3  KGCJ %v \n", KGCj)
 			r2msg2 := round.temp.kgRound2Message2s[j].Content().(*KGRound2Message2)
 			KGDj := r2msg2.UnmarshalDeCommitment()
 			cmtDeCmt := commitments.HashCommitDecommit{C: KGCj, D: KGDj}
@@ -80,12 +81,10 @@ func (round *round3) Start() *tss.Error {
 				ch <- vssOut{errors.New("de-commitment verify failed"), nil}
 				return
 			}
-
 			PjVs, err := crypto.UnFlattenECPoints(round.Params().EC(), flatPolyGs)
 			for i, PjV := range PjVs {
 				PjVs[i] = PjV.EightInvEight()
 			}
-
 			if err != nil {
 				ch <- vssOut{err, nil}
 				return
@@ -95,6 +94,7 @@ func (round *round3) Start() *tss.Error {
 				ch <- vssOut{errors.New("failed to unmarshal schnorr proof"), nil}
 				return
 			}
+			fmt.Printf("\n ROUND 3  proof %v \n", proof)
 			ok = proof.Verify(ContextJ, PjVs[0])
 			if !ok {
 				ch <- vssOut{errors.New("failed to prove schnorr proof"), nil}
@@ -191,7 +191,7 @@ func (round *round3) Start() *tss.Error {
 	}
 
 	// 18. compute and SAVE the EDDSA public key `y`
-	eddsaPubKey, err := crypto.NewECPointBJJ(round.Params().EC(), Vc[0].X(), Vc[0].Y())
+	eddsaPubKey, err := crypto.NewECPoint(round.Params().EC(), Vc[0].X(), Vc[0].Y())
 	if err != nil {
 		return round.WrapError(errors2.Wrapf(err, "public key is not on the curve"))
 	}

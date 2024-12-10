@@ -32,10 +32,35 @@ func TestSchnorrProof(t *testing.T) {
 	assert.NotZero(t, proof.T)
 }
 
+func TestSchnorrProofBJJ(t *testing.T) {
+	ec := tss.BabyJubJub()
+	q := ec.Params().N
+	u := common.GetRandomPositiveInt(rand.Reader, q)
+	uG := crypto.ScalarBaseMult(ec, u)
+	proof, _ := NewZKProof(Session, u, uG, rand.Reader)
+
+	assert.True(t, proof.Alpha.IsOnCurve())
+	assert.NotZero(t, proof.Alpha.X())
+	assert.NotZero(t, proof.Alpha.Y())
+	assert.NotZero(t, proof.T)
+}
+
 func TestSchnorrProofVerify(t *testing.T) {
 	q := tss.EC().Params().N
 	u := common.GetRandomPositiveInt(rand.Reader, q)
 	X := crypto.ScalarBaseMult(tss.EC(), u)
+
+	proof, _ := NewZKProof(Session, u, X, rand.Reader)
+	res := proof.Verify(Session, X)
+
+	assert.True(t, res, "verify result must be true")
+}
+
+func TestSchnorrProofBJJVerify(t *testing.T) {
+	ec := tss.BabyJubJub()
+	q := ec.Params().N
+	u := common.GetRandomPositiveInt(rand.Reader, q)
+	X := crypto.ScalarBaseMult(ec, u)
 
 	proof, _ := NewZKProof(Session, u, X, rand.Reader)
 	res := proof.Verify(Session, X)
@@ -49,6 +74,20 @@ func TestSchnorrProofVerifyBadX(t *testing.T) {
 	u2 := common.GetRandomPositiveInt(rand.Reader, q)
 	X := crypto.ScalarBaseMult(tss.EC(), u)
 	X2 := crypto.ScalarBaseMult(tss.EC(), u2)
+
+	proof, _ := NewZKProof(Session, u2, X2, rand.Reader)
+	res := proof.Verify(Session, X)
+
+	assert.False(t, res, "verify result must be false")
+}
+
+func TestSchnorrProofBJJVerifyBadX(t *testing.T) {
+	ec := tss.BabyJubJub()
+	q := ec.Params().N
+	u := common.GetRandomPositiveInt(rand.Reader, q)
+	u2 := common.GetRandomPositiveInt(rand.Reader, q)
+	X := crypto.ScalarBaseMult(ec, u)
+	X2 := crypto.ScalarBaseMult(ec, u2)
 
 	proof, _ := NewZKProof(Session, u2, X2, rand.Reader)
 	res := proof.Verify(Session, X)
@@ -72,12 +111,45 @@ func TestSchnorrVProofVerify(t *testing.T) {
 	assert.True(t, res, "verify result must be true")
 }
 
+func TestSchnorrVProofBJJVerify(t *testing.T) {
+	ec := tss.BabyJubJub()
+	q := ec.Params().N
+	k := common.GetRandomPositiveInt(rand.Reader, q)
+	s := common.GetRandomPositiveInt(rand.Reader, q)
+	l := common.GetRandomPositiveInt(rand.Reader, q)
+	R := crypto.ScalarBaseMult(ec, k) // k_-1 * G
+	Rs := R.ScalarMult(s)
+	lG := crypto.ScalarBaseMult(ec, l)
+	V, _ := Rs.Add(lG)
+
+	proof, _ := NewZKVProof(Session, V, R, s, l, rand.Reader)
+	res := proof.Verify(Session, V, R)
+
+	assert.True(t, res, "verify result must be true")
+}
+
 func TestSchnorrVProofVerifyBadPartialV(t *testing.T) {
 	q := tss.EC().Params().N
 	k := common.GetRandomPositiveInt(rand.Reader, q)
 	s := common.GetRandomPositiveInt(rand.Reader, q)
 	l := common.GetRandomPositiveInt(rand.Reader, q)
 	R := crypto.ScalarBaseMult(tss.EC(), k) // k_-1 * G
+	Rs := R.ScalarMult(s)
+	V := Rs
+
+	proof, _ := NewZKVProof(Session, V, R, s, l, rand.Reader)
+	res := proof.Verify(Session, V, R)
+
+	assert.False(t, res, "verify result must be false")
+}
+
+func TestSchnorrVProofBJJVerifyBadPartialV(t *testing.T) {
+	ec := tss.BabyJubJub()
+	q := ec.Params().N
+	k := common.GetRandomPositiveInt(rand.Reader, q)
+	s := common.GetRandomPositiveInt(rand.Reader, q)
+	l := common.GetRandomPositiveInt(rand.Reader, q)
+	R := crypto.ScalarBaseMult(ec, k) // k_-1 * G
 	Rs := R.ScalarMult(s)
 	V := Rs
 
@@ -96,6 +168,24 @@ func TestSchnorrVProofVerifyBadS(t *testing.T) {
 	R := crypto.ScalarBaseMult(tss.EC(), k) // k_-1 * G
 	Rs := R.ScalarMult(s)
 	lG := crypto.ScalarBaseMult(tss.EC(), l)
+	V, _ := Rs.Add(lG)
+
+	proof, _ := NewZKVProof(Session, V, R, s2, l, rand.Reader)
+	res := proof.Verify(Session, V, R)
+
+	assert.False(t, res, "verify result must be false")
+}
+
+func TestSchnorrVProofBJJVerifyBadS(t *testing.T) {
+	ec := tss.BabyJubJub()
+	q := ec.Params().N
+	k := common.GetRandomPositiveInt(rand.Reader, q)
+	s := common.GetRandomPositiveInt(rand.Reader, q)
+	s2 := common.GetRandomPositiveInt(rand.Reader, q)
+	l := common.GetRandomPositiveInt(rand.Reader, q)
+	R := crypto.ScalarBaseMult(ec, k) // k_-1 * G
+	Rs := R.ScalarMult(s)
+	lG := crypto.ScalarBaseMult(ec, l)
 	V, _ := Rs.Add(lG)
 
 	proof, _ := NewZKVProof(Session, V, R, s2, l, rand.Reader)

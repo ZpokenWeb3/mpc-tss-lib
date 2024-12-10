@@ -100,6 +100,28 @@ func BabyJubJub() *BabyJubJubCurve {
 	return babyjubjub
 }
 
+func (curve *BabyJubJubCurve) Add(x1, y1, x2, y2 *big.Int) (x, y *big.Int) {
+	a := &iden3bjj.Point{X: x1, Y: y1}
+	b := &iden3bjj.Point{X: x2, Y: y2}
+	// Convert to projective from affine.
+	c := iden3bjj.NewPoint().Projective().Add(a.Projective(), b.Projective()).Affine()
+
+	return c.X, c.Y
+}
+
+func (curve *BabyJubJubCurve) ScalarMult(x1, y1 *big.Int, k []byte) (x, y *big.Int) {
+	// Convert the scalar to a big int.
+	s := new(big.Int).SetBytes(k)
+	// s1 := s.Mod(s, curve.Params().N)
+	a := &iden3bjj.Point{X: x1, Y: y1}
+	c := iden3bjj.NewPoint().Mul(s, a)
+	return c.X, c.Y
+}
+
+func (curve *BabyJubJubCurve) ScalarBaseMult(k []byte) (x, y *big.Int) {
+	return curve.ScalarMult(curve.Gx, curve.Gy, k)
+}
+
 // fromHex converts the passed hex string into a big integer pointer and will
 // panic is there is an error.  This is only provided for the hard-coded
 // constants so errors in the source code can bet detected. It will only (and

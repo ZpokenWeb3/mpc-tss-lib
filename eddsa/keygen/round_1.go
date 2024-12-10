@@ -47,12 +47,13 @@ func (round *round1) Start() *tss.Error {
 
 	// 1. calculate "partial" key share ui
 	ui := common.GetRandomPositiveInt(round.PartialKeyRand(), round.Params().EC().Params().N)
+
 	round.temp.ui = ui
 
 	// 2. compute the vss shares
 	ids := round.Parties().IDs().Keys()
 	fmt.Printf("\n ROUND1 \n")
-	vs, shares, err := vss.CreateBJJ(round.EC(), round.Threshold(), ui, ids, round.Rand())
+	vs, shares, err := vss.Create(round.EC(), round.Threshold(), ui, ids, round.Rand())
 	if err != nil {
 		return round.WrapError(err, Pi)
 	}

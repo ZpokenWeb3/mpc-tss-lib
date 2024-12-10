@@ -20,6 +20,7 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/tss"
 
+	"github.com/bnb-chain/tss-lib/v2/babyjubjub"
 	iden3bjj "github.com/iden3/go-iden3-crypto/babyjub"
 )
 
@@ -34,16 +35,16 @@ var (
 	eightInv = new(big.Int).ModInverse(eight, edwards.Edwards().Params().N)
 )
 
-// Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
-func NewECPointBJJ(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
-	a := iden3bjj.NewPoint()
-	a.X = X
-	a.Y = Y
-	if !a.InCurve() {
-		return nil, fmt.Errorf("BJJ NewECPoint: the given point is not on the elliptic curve")
-	}
-	return &ECPoint{curve, [2]*big.Int{X, Y}}, nil
-}
+// // Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
+// func NewECPointBJJ(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
+// 	a := iden3bjj.NewPoint()
+// 	a.X = X
+// 	a.Y = Y
+// 	if !a.InCurve() {
+// 		return nil, fmt.Errorf("BJJ NewECPoint: the given point is not on the elliptic curve")
+// 	}
+// 	return &ECPoint{curve, [2]*big.Int{X, Y}}, nil
+// }
 
 // Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
 func NewECPoint(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
@@ -93,6 +94,13 @@ func (p *ECPoint) IsOnCurve() bool {
 	return isOnCurve(p.curve, p.coords[0], p.coords[1])
 }
 
+// func (p *ECPoint) IsOnCurveBJJ() bool {
+// 	a := iden3bjj.NewPoint()
+// 	a.X = p.X()
+// 	a.Y = p.Y()
+// 	return a.InCurve()
+// }
+
 func (p *ECPoint) Curve() elliptic.Curve {
 	return p.curve
 }
@@ -119,7 +127,17 @@ func (p *ECPoint) ValidateBasicBJJ() bool {
 }
 
 func (p *ECPoint) ValidateBasic() bool {
-	return p != nil && p.coords[0] != nil && p.coords[1] != nil && p.IsOnCurve()
+	var isOnCurve bool
+	switch p.curve.(type) {
+	case *babyjubjub.BabyJubJubCurve:
+		a := iden3bjj.NewPoint()
+		a.X = p.X()
+		a.Y = p.Y()
+		isOnCurve = a.InCurve()
+	default:
+		p.IsOnCurve()
+	}
+	return p != nil && p.coords[0] != nil && p.coords[1] != nil && isOnCurve
 }
 
 func (p *ECPoint) EightInvEight() *ECPoint {
@@ -131,7 +149,7 @@ func ScalarBaseMultBJJ(curve elliptic.Curve, k *big.Int) *ECPoint {
 	a := iden3bjj.B8.Mul(k, iden3bjj.B8)
 	// b := a.InCurve()
 	// fmt.Printf("\n\t BJJ ScalarBaseMult x: %d, y: %d\ncurveP %d\n N %d\n B %d\n K %d\n b %t\n", a.X, a.Y, curve.Params().P, curve.Params().N, curve.Params().B, k, b)
-	p, err := NewECPointBJJ(curve, a.X, a.Y) // it must be on the curve, no need to check.
+	p, err := NewECPoint(curve, a.X, a.Y) // it must be on the curve, no need to check.
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
 	}
@@ -139,12 +157,8 @@ func ScalarBaseMultBJJ(curve elliptic.Curve, k *big.Int) *ECPoint {
 }
 
 func ScalarBaseMult(curve elliptic.Curve, k *big.Int) *ECPoint {
-	k = k.Mod(k, curve.Params().N)
 	x, y := curve.ScalarBaseMult(k.Bytes())
-	a := iden3bjj.B8.Mul(k, iden3bjj.B8)
-	b := curve.IsOnCurve(a.X, a.Y)
-	fmt.Printf("\n\ttScalarBaseMult x: %d, y: %d\ncurveP %d\n N %d\n B %d\n K %d\n b %t\n", x, y, curve.Params().P, curve.Params().N, curve.Params().B, k, b)
-	p, err := NewECPoint(curve, a.X, a.Y) // it must be on the curve, no need to check.
+	p, err := NewECPoint(curve, x, y) // it must be on the curve, no need to check.
 	if err != nil {
 		panic(fmt.Errorf("scalar mult to an ecpoint %s", err.Error()))
 	}
@@ -156,7 +170,15 @@ func isOnCurve(c elliptic.Curve, x, y *big.Int) bool {
 		fmt.Println("x == nil || y == nil ")
 		return false
 	}
-	return c.IsOnCurve(x, y)
+	switch curve := c.(type) {
+	case *babyjubjub.BabyJubJubCurve:
+		a := iden3bjj.NewPoint()
+		a.X = x
+		a.Y = y
+		return a.InCurve()
+	default:
+		return curve.IsOnCurve(x, y)
+	}
 }
 
 // ----- //

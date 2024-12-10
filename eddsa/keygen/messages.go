@@ -112,7 +112,7 @@ func (m *KGRound2Message2) UnmarshalDeCommitment() []*big.Int {
 }
 
 func (m *KGRound2Message2) UnmarshalZKProofBJJ(ec elliptic.Curve) (*schnorr.ZKProof, error) {
-	point, err := crypto.NewECPointBJJ(ec,
+	point, err := crypto.NewECPoint(ec,
 		new(big.Int).SetBytes(m.GetProofAlphaX()),
 		new(big.Int).SetBytes(m.GetProofAlphaY()))
 	if err != nil {

@@ -41,7 +41,7 @@ func NewZKProofBJJ(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader
 	g := crypto.NewECPointNoCurveCheck(ec, ecParams.Gx, ecParams.Gy) // already on the curve.
 
 	a := common.GetRandomPositiveInt(rand, q)
-	alpha := crypto.ScalarBaseMultBJJ(ec, a)
+	alpha := crypto.ScalarBaseMult(ec, a)
 
 	var c *big.Int
 	{
