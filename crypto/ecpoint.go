@@ -90,13 +90,6 @@ func (p *ECPoint) IsOnCurve() bool {
 	return isOnCurve(p.curve, p.coords[0], p.coords[1])
 }
 
-// func (p *ECPoint) IsOnCurveBJJ() bool {
-// 	a := iden3bjj.NewPoint()
-// 	a.X = p.X()
-// 	a.Y = p.Y()
-// 	return a.InCurve()
-// }
-
 func (p *ECPoint) Curve() elliptic.Curve {
 	return p.curve
 }

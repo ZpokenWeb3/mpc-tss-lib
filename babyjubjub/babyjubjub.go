@@ -1,6 +1,7 @@
 package babyjubjub
 
 import (
+	"crypto/ecdsa"
 	"crypto/elliptic"
 	"fmt"
 	"math/big"
@@ -120,6 +121,51 @@ func (curve *BabyJubJubCurve) ScalarMult(x1, y1 *big.Int, k []byte) (x, y *big.I
 
 func (curve *BabyJubJubCurve) ScalarBaseMult(k []byte) (x, y *big.Int) {
 	return curve.ScalarMult(curve.Gx, curve.Gy, k)
+}
+
+type PublicKey ecdsa.PublicKey
+
+const (
+	PrivScalarSize = 32
+)
+
+type PrivateKey struct {
+	ecPk   *ecdsa.PrivateKey
+	secret *[32]byte
+}
+
+func (p PrivateKey) GetD() *big.Int {
+	return p.ecPk.D
+}
+
+func PrivKeyFromScalar(p []byte) (*PrivateKey, *PublicKey, error) {
+	if len(p) != PrivScalarSize {
+		return nil, nil, fmt.Errorf("bad private scalar size")
+	}
+
+	pk := new(PrivateKey)
+	pk.ecPk = new(ecdsa.PrivateKey)
+	pk.ecPk.D = new(big.Int).SetBytes(p)
+
+	curve := BabyJubJub()
+	if pk.ecPk.D.Cmp(curve.N) > 0 {
+		return nil, nil, fmt.Errorf("not on subgroup (>N)")
+	}
+
+	if pk.ecPk.D.Cmp(new(big.Int).SetInt64(0)) <= 0 {
+		return nil, nil, fmt.Errorf("zero or negative scalar")
+	}
+
+	pk.ecPk.Curve = curve
+	pk.ecPk.PublicKey.X, pk.ecPk.PublicKey.Y =
+		curve.ScalarBaseMult(pk.GetD().Bytes())
+
+	if pk.ecPk.PublicKey.X == nil || pk.ecPk.PublicKey.Y == nil {
+		return nil, nil, fmt.Errorf("scalarbase mult failure to get pubkey")
+	}
+	pub := PublicKey(pk.ecPk.PublicKey)
+
+	return pk, &pub, nil
 }
 
 // fromHex converts the passed hex string into a big integer pointer and will
