@@ -17,9 +17,6 @@ Zpoken has used the initial implementation from **BNB Chain** (forked) as a foun
 Signatures:               
 - [x] ECDSA
 - [x] EdDSA
-- [ ] RSA signatures    
-    - [ ] PSS
-    - [ ] PKCS1v15
 - [ ] BLS
 
 Hashes:
