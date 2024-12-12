@@ -14,14 +14,14 @@ import (
 	"testing"
 
 	"github.com/agl/ed25519/edwards25519"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ipfs/go-log"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/test"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/ipfs/go-log"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -120,7 +120,12 @@ signing:
 				fmt.Printf("R: %s\n", R.String())
 				// END check s correctness
 
-				// BEGIN EDDSA verify
+				// BEGIN Poseidon-based EDDSA verify
+				poseidonHash, err := poseidon.HashBytes(msg.Bytes()) // Confirm this matches round3 implementation
+				if err != nil {
+					t.Fatalf("Poseidon hashing failed: %v", err)
+				}
+
 				pkX, pkY := keys[0].EDDSAPub.X(), keys[0].EDDSAPub.Y()
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
@@ -133,10 +138,11 @@ signing:
 					println("new sig error, ", err.Error())
 				}
 
-				ok := edwards.Verify(&pk, msg.Bytes(), newSig.R, newSig.S)
-				assert.True(t, ok, "eddsa verify must pass")
-				t.Log("EDDSA signing test done.")
-				// END EDDSA verify
+				ok := edwards.Verify(&pk, poseidonHash.Bytes(), newSig.R, newSig.S)
+				assert.True(t, ok, "Poseidon-based EDDSA verify must pass")
+
+				t.Log("Poseidon-based EDDSA signing test done.")
+				// END Poseidon-based EDDSA verify
 
 				break signing
 			}
@@ -225,7 +231,12 @@ signing:
 				fmt.Printf("R: %s\n", R.String())
 				// END check s correctness
 
-				// BEGIN EDDSA verify
+				// BEGIN Poseidon-based EDDSA verify
+				poseidonHash, err := poseidon.HashBytes(msg)
+				if err != nil {
+					t.Fatalf("Poseidon hashing failed: %v", err)
+				}
+
 				pkX, pkY := keys[0].EDDSAPub.X(), keys[0].EDDSAPub.Y()
 				pk := edwards.PublicKey{
 					Curve: tss.Edwards(),
@@ -238,10 +249,137 @@ signing:
 					println("new sig error, ", err.Error())
 				}
 
-				ok := edwards.Verify(&pk, msg, newSig.R, newSig.S)
-				assert.True(t, ok, "eddsa verify must pass")
-				t.Log("EDDSA signing test done.")
-				// END EDDSA verify
+				ok := edwards.Verify(&pk, poseidonHash.Bytes(), newSig.R, newSig.S)
+				assert.True(t, ok, "Poseidon-based EDDSA verify must pass")
+				t.Log("Poseidon-based EDDSA signing test done.")
+				// END Poseidon-based EDDSA verify
+
+				break signing
+			}
+		}
+	}
+}
+
+// Correct conversion of R to a fixed-size [32]byte array
+func TestPoseidonE2EConcurrent(t *testing.T) {
+	setUp("info")
+
+	threshold := testThreshold
+
+	// PHASE: load keygen fixtures
+	keys, signPIDs, err := keygen.LoadKeygenTestFixturesRandomSet(testThreshold+1, testParticipants)
+	assert.NoError(t, err, "should load keygen fixtures")
+	assert.Equal(t, testThreshold+1, len(keys))
+	assert.Equal(t, testThreshold+1, len(signPIDs))
+
+	// PHASE: signing
+	p2pCtx := tss.NewPeerContext(signPIDs)
+	parties := make([]*LocalParty, 0, len(signPIDs))
+
+	errCh := make(chan *tss.Error, len(signPIDs))
+	outCh := make(chan tss.Message, len(signPIDs))
+	endCh := make(chan *common.SignatureData, len(signPIDs))
+
+	updater := test.SharedPartyUpdater
+
+	// Example message
+	msg := big.NewInt(200)
+
+	// Initialize parties
+	for i := 0; i < len(signPIDs); i++ {
+		params := tss.NewParameters(tss.Edwards(), p2pCtx, signPIDs[i], len(signPIDs), threshold)
+
+		P := NewLocalParty(msg, params, keys[i], outCh, endCh).(*LocalParty)
+		parties = append(parties, P)
+		go func(P *LocalParty) {
+			if err := P.Start(); err != nil {
+				errCh <- err
+			}
+		}(P)
+	}
+
+	var ended int32
+signing:
+	for {
+		select {
+		case err := <-errCh:
+			common.Logger.Errorf("Error: %s", err)
+			assert.FailNow(t, err.Error())
+			break signing
+
+		case msg := <-outCh:
+			dest := msg.GetTo()
+			if dest == nil {
+				for _, P := range parties {
+					if P.PartyID().Index == msg.GetFrom().Index {
+						continue
+					}
+					go updater(P, msg, errCh)
+				}
+			} else {
+				if dest[0].Index == msg.GetFrom().Index {
+					t.Fatalf("party %d tried to send a message to itself (%d)", dest[0].Index, msg.GetFrom().Index)
+				}
+				go updater(parties[dest[0].Index], msg, errCh)
+			}
+
+		case <-endCh:
+			atomic.AddInt32(&ended, 1)
+			if atomic.LoadInt32(&ended) == int32(len(signPIDs)) {
+				t.Logf("Done. Received signature data from %d participants", ended)
+
+				// Retrieve computed R and s from the first party
+				R := parties[0].temp.r
+				sumS := parties[0].temp.si
+
+				// Combine `s` values from all parties
+				for i, p := range parties {
+					if i == 0 {
+						continue
+					}
+					var tmpSumS [32]byte
+					edwards25519.ScMulAdd(&tmpSumS, sumS, bigIntToEncodedBytes(big.NewInt(1)), p.temp.si)
+					sumS = &tmpSumS
+				}
+				t.Logf("Intermediate S: %x", encodedBytesToBigInt(sumS).Bytes())
+				t.Logf("Intermediate R: %x", R.Bytes())
+
+				// BEGIN: Poseidon-specific EDDSA signature verification
+				// Convert R to a fixed-size [32]byte
+				var RBytes [32]byte
+				copy(RBytes[:], R.Bytes())
+
+				// Convert public key to bytes manually
+				pkX, pkY := keys[0].EDDSAPub.X(), keys[0].EDDSAPub.Y()
+				pubKeyBytes := append(pkX.Bytes(), pkY.Bytes()...)
+
+				// Recompute Poseidon hash
+				poseidonInputs := [][]byte{RBytes[:], pubKeyBytes, msg.Bytes()}
+				poseidonHash, err := poseidon.HashBytes(flattenByteSlices(poseidonInputs))
+				assert.NoError(t, err, "Poseidon hashing should succeed")
+
+				var reducedHash [32]byte
+				copy(reducedHash[:], poseidonHash.Bytes())
+
+				// Public key reconstruction
+				pk := edwards.PublicKey{
+					Curve: tss.Edwards(),
+					X:     pkX,
+					Y:     pkY,
+				}
+
+				// Verify signature
+				signatureR := encodedBytesToBigInt(&RBytes)
+				signatureS := encodedBytesToBigInt(sumS)
+				signature := &edwards.Signature{
+					R: signatureR,
+					S: signatureS,
+				}
+
+				ok := edwards.Verify(&pk, reducedHash[:], signature.R, signature.S)
+				assert.True(t, ok, "Poseidon-based EDDSA verification must pass")
+				t.Log("Poseidon-based EDDSA signing test passed.")
+				// END: Poseidon-specific EDDSA signature verification
 
 				break signing
 			}

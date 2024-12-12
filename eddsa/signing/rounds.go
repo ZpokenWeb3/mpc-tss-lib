@@ -12,6 +12,7 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
@@ -102,18 +103,45 @@ func (round *base) resetOK() {
 	}
 }
 
-// get ssid from local params
+var fieldModulus = new(big.Int).SetBytes([]byte{
+	0x24, 0x03, 0x4b, 0x62, 0xb0, 0x00, 0x00, 0x00,
+	0x18, 0x00, 0x00, 0x00, 0xa8, 0x00, 0x00, 0x00,
+	0x01, 0xd8, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x00,
+	0x00, 0x3b, 0x00, 0x00, 0x00, 0x01,
+})
+
+// get ssid from local params using Poseidon hash
 func (round *base) getSSID() ([]byte, error) {
-	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
-	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                         // parties
+	ssidList := []*big.Int{
+		round.EC().Params().P,
+		round.EC().Params().N,
+		round.EC().Params().Gx,
+		round.EC().Params().Gy, // EC curve
+	}
+	ssidList = append(ssidList, round.Parties().IDs().Keys()...) // Parties
 	BigXjList, err := crypto.FlattenECPoints(round.key.BigXj)
 	if err != nil {
 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
 	}
 	ssidList = append(ssidList, BigXjList...)                    // BigXj
-	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+	ssidList = append(ssidList, big.NewInt(int64(round.number))) // Round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
-	ssid := common.SHA512_256i(ssidList...).Bytes()
 
-	return ssid, nil
+	// Validate and reduce inputs modulo the hardcoded field modulus
+	validatedInputs := []*big.Int{}
+	for _, item := range ssidList {
+		reduced := new(big.Int).Mod(item, fieldModulus)
+		if reduced.Sign() < 0 {
+			reduced.Add(reduced, fieldModulus)
+		}
+		validatedInputs = append(validatedInputs, reduced)
+	}
+
+	// Compute Poseidon hash
+	ssidHash, err := poseidon.Hash(validatedInputs)
+	if err != nil {
+		return nil, round.WrapError(errors.New("Poseidon hashing failed"), round.PartyID())
+	}
+
+	return ssidHash.Bytes(), nil
 }

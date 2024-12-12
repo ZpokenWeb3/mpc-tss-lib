@@ -7,7 +7,6 @@
 package signing
 
 import (
-	"crypto/sha512"
 	"math/big"
 
 	"github.com/agl/ed25519/edwards25519"
@@ -16,8 +15,28 @@ import (
 
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/crypto/commitments"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
+
+// flattenByteSlices concatenates slices of bytes into a single slice
+func flattenByteSlices(slices [][]byte) []byte {
+	totalLength := 0
+	for _, slice := range slices {
+		if len(slice) == 0 {
+			panic("empty slice detected in Poseidon inputs")
+		}
+		totalLength += len(slice)
+	}
+
+	flattened := make([]byte, totalLength)
+	offset := 0
+	for _, slice := range slices {
+		copy(flattened[offset:], slice)
+		offset += len(slice)
+	}
+	return flattened
+}
 
 func (round *round3) Start() *tss.Error {
 	if round.started {
@@ -28,12 +47,12 @@ func (round *round3) Start() *tss.Error {
 	round.started = true
 	round.resetOK()
 
-	// 1. init R
+	// 1. Initialize R
 	var R edwards25519.ExtendedGroupElement
 	riBytes := bigIntToEncodedBytes(round.temp.ri)
 	edwards25519.GeScalarMultBase(&R, riBytes)
 
-	// 2-6. compute R
+	// 2-6. Compute R
 	i := round.PartyID().Index
 	for j, Pj := range round.Parties().IDs() {
 		if j == i {
@@ -70,38 +89,48 @@ func (round *round3) Start() *tss.Error {
 		R = addExtendedElements(R, extendedRj)
 	}
 
-	// 7. compute lambda
+	// 7. Compute lambda using Poseidon
 	var encodedR [32]byte
 	R.ToBytes(&encodedR)
 	encodedPubKey := ecPointToEncodedBytes(round.key.EDDSAPub.X(), round.key.EDDSAPub.Y())
 
-	// h = hash512(k || A || M)
-	h := sha512.New()
-	h.Reset()
-	h.Write(encodedR[:])
-	h.Write(encodedPubKey[:])
+	// Prepare inputs for Poseidon
+	poseidonInputs := [][]byte{encodedR[:], encodedPubKey[:]}
 	if round.temp.fullBytesLen == 0 {
-		h.Write(round.temp.m.Bytes())
+		poseidonInputs = append(poseidonInputs, round.temp.m.Bytes())
 	} else {
-		var mBytes = make([]byte, round.temp.fullBytesLen)
+		mBytes := make([]byte, round.temp.fullBytesLen)
 		round.temp.m.FillBytes(mBytes)
-		h.Write(mBytes)
+		poseidonInputs = append(poseidonInputs, mBytes)
 	}
 
+	// Perform Poseidon hashing
+	poseidonHash, err := poseidon.HashBytes(flattenByteSlices(poseidonInputs))
+	if err != nil {
+		return round.WrapError(errors.Wrap(err, "Poseidon hashing failed"))
+	}
+
+	// Convert Poseidon hash to a [64]byte array
 	var lambda [64]byte
-	h.Sum(lambda[:0])
+	copy(lambda[:], poseidonHash.Bytes())
+	common.Logger.Infof("Poseidon Hash (lambda): %x", lambda)
+
+	// Reduce the hash output to a scalar
 	var lambdaReduced [32]byte
 	edwards25519.ScReduce(&lambdaReduced, &lambda)
 
-	// 8. compute si
+	// 8. Compute si
 	var localS [32]byte
 	edwards25519.ScMulAdd(&localS, &lambdaReduced, bigIntToEncodedBytes(round.temp.wi), riBytes)
+	common.Logger.Infof("Reduced lambda: %x", lambdaReduced)
 
-	// 9. store r3 message pieces
+	// 9. Store r3 message pieces
 	round.temp.si = &localS
 	round.temp.r = encodedBytesToBigInt(&encodedR)
+	common.Logger.Infof("Computed si: %x", localS)
+	common.Logger.Infof("Inputs to Poseidon hash: R=%x, PubKey=%x, Message=%x", encodedR[:], encodedPubKey[:], round.temp.m.Bytes())
 
-	// 10. broadcast si to other parties
+	// 10. Broadcast si to other parties
 	r3msg := NewSignRound3Message(round.PartyID(), encodedBytesToBigInt(&localS))
 	round.temp.signRound3Messages[round.PartyID().Index] = r3msg
 	round.out <- r3msg

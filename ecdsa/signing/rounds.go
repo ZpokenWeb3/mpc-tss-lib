@@ -152,10 +152,9 @@ func (round *base) getSSID() ([]byte, error) {
 	ssidList = append(ssidList, big.NewInt(int64(round.number)))
 	ssidList = append(ssidList, round.temp.ssidNonce)
 
-	// Validate and reduce inputs modulo the field modulus
 	validatedInputs := []*big.Int{}
 	for _, item := range ssidList {
-		// Ensure the input is non-negative and within the field range
+
 		reduced := new(big.Int).Mod(item, fieldModulus)
 		if reduced.Sign() < 0 {
 			reduced.Add(reduced, fieldModulus)
@@ -163,7 +162,6 @@ func (round *base) getSSID() ([]byte, error) {
 		validatedInputs = append(validatedInputs, reduced)
 	}
 
-	// Batching inputs for Poseidon
 	const maxInputs = 16
 	chunkedHashes := []*big.Int{}
 	for i := 0; i < len(validatedInputs); i += maxInputs {
@@ -171,8 +169,6 @@ func (round *base) getSSID() ([]byte, error) {
 		if end > len(validatedInputs) {
 			end = len(validatedInputs)
 		}
-
-		// Hash each chunk separately
 		chunk := validatedInputs[i:end]
 		chunkHash, err := poseidon.Hash(chunk)
 		if err != nil {
@@ -181,7 +177,6 @@ func (round *base) getSSID() ([]byte, error) {
 		chunkedHashes = append(chunkedHashes, chunkHash)
 	}
 
-	// Final hash from all chunked hashes
 	finalHash, err := poseidon.Hash(chunkedHashes)
 	if err != nil {
 		return nil, round.WrapError(fmt.Errorf("Poseidon final hashing failed: %w", err), round.PartyID())
