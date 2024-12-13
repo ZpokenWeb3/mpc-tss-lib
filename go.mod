@@ -9,6 +9,7 @@ require (
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/decred/dcrd/dcrec/edwards/v2 v2.0.3
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/iden3/go-iden3-crypto v0.0.17 // indirect
 	github.com/ipfs/go-log v1.0.5
 	github.com/otiai10/primes v0.0.0-20210501021515-f1b2be525a11
 	github.com/pkg/errors v0.9.1
@@ -18,3 +19,4 @@ require (
 )
 
 replace github.com/agl/ed25519 => github.com/binance-chain/edwards25519 v0.0.0-20200305024217-f36fc4b53d43
+replace github.com/iden3/go-iden3-crypto => ../go-iden3-crypto
