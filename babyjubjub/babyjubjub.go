@@ -134,6 +134,9 @@ type PrivateKey struct {
 	secret *[32]byte
 }
 
+// PrivKeyScalar represents the scalar s output of a private key
+type PrivKeyScalar big.Int
+
 func (p PrivateKey) GetD() *big.Int {
 	return p.ecPk.D
 }
@@ -167,6 +170,18 @@ func PrivKeyFromScalar(p []byte) (*PrivateKey, *PublicKey, error) {
 
 	return pk, &pub, nil
 }
+
+// SignPoseidon signs a message encoded as a big.Int in Zq using blake-512 hash
+// for buffer hashing and Poseidon for big.Int hashing.
+// func (k *PrivateKey) SignPoseidon(msg *big.Int) *iden3bjj.Signature {
+// 	return k.SignPoseidon(msg)
+// }
+
+// SignPoseidon signs a message encoded as a big.Int in Zq using blake-512 hash
+// for buffer hashing and Poseidon for big.Int hashing.
+// func (k *PrivKeyScalar) SignPoseidonScalar(msg *big.Int) *iden3bjj.Signature {
+// 	return k.SignPoseidonScalar(msg)
+// }
 
 // fromHex converts the passed hex string into a big integer pointer and will
 // panic is there is an error.  This is only provided for the hard-coded
