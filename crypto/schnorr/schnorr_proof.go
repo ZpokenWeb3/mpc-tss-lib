@@ -8,7 +8,6 @@ package schnorr
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 
@@ -30,7 +29,7 @@ type (
 
 // NewZKProof constructs a new Schnorr ZK proof of knowledge of the discrete logarithm (GG18Spec Fig. 16)
 func NewZKProof(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader) (*ZKProof, error) {
-	fmt.Printf("\n NewZKProof: x %d, X %d, rand %d\n", x, X, rand)
+	// fmt.Printf("\n NewZKProof: x %d, X %d, rand %d\n", x, X, rand)
 	if x == nil || X == nil || !X.ValidateBasic() {
 		return nil, errors.New("ZKProof constructor received nil or invalid value(s)")
 	}

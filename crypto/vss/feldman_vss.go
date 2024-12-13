@@ -24,7 +24,7 @@ import (
 type (
 	Share struct {
 		Threshold int
-		ID, // xi
+		ID,       // xi
 		Share *big.Int // Sigma i
 	}
 
@@ -81,11 +81,11 @@ func Create(ec elliptic.Curve, threshold int, secret *big.Int, indexes []*big.In
 
 	v := make(Vs, len(poly))
 	for i, ai := range poly {
-		fmt.Printf("\n\t\ti: %d ai %d\n\n", i, ai)
+		// fmt.Printf("\n\t\ti: %d ai %d\n\n", i, ai)
 		v[i] = crypto.ScalarBaseMult(ec, ai)
 	}
 
-	fmt.Println("Create END")
+	// fmt.Println("Create END")
 
 	shares := make(Shares, num)
 	for i := 0; i < num; i++ {
@@ -126,7 +126,7 @@ func (shares Shares) ReConstruct(ec elliptic.Curve) (secret *big.Int, err error)
 	xs := make([]*big.Int, 0)
 	for _, share := range shares {
 		xs = append(xs, share.ID)
-		fmt.Printf("\n xs: %v\n", xs)
+		// fmt.Printf("\n xs: %v\n", xs)
 	}
 
 	secret = zero
@@ -137,13 +137,13 @@ func (shares Shares) ReConstruct(ec elliptic.Curve) (secret *big.Int, err error)
 				continue
 			}
 			sub := modN.Sub(xs[j], share.ID)
-			fmt.Printf("\n sub: %v\n", sub)
+			// fmt.Printf("\n sub: %v\n", sub)
 			subInv := modN.ModInverse(sub)
-			fmt.Printf("\n subInv: %v\n", subInv)
+			// fmt.Printf("\n subInv: %v\n", subInv)
 			div := modN.Mul(xs[j], subInv)
-			fmt.Printf("\n div: %v\n", div)
+			// fmt.Printf("\n div: %v\n", div)
 			times = modN.Mul(times, div)
-			fmt.Printf("\n times: %v\n", times)
+			// fmt.Printf("\n times: %v\n", times)
 		}
 
 		fTimes := modN.Mul(share.Share, times)

@@ -8,7 +8,6 @@ package keygen
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/hashicorp/go-multierror"
@@ -93,7 +92,7 @@ func (round *round3) Start() *tss.Error {
 				ch <- vssOut{errors.New("failed to unmarshal schnorr proof"), nil}
 				return
 			}
-			fmt.Printf("\n ROUND 3  proof %v \n", proof)
+			// fmt.Printf("\n ROUND 3  proof %v \n", proof)
 			ok = proof.Verify(ContextJ, PjVs[0])
 			if !ok {
 				ch <- vssOut{errors.New("failed to prove schnorr proof"), nil}
@@ -125,7 +124,7 @@ func (round *round3) Start() *tss.Error {
 			vssResults[j] = <-chs[j]
 			// collect culprits to error out with
 			if err := vssResults[j].unWrappedErr; err != nil {
-				fmt.Printf("\n ROUND 3 \n")
+				// fmt.Printf("\n ROUND 3 \n")
 
 				culprits = append(culprits, Pj)
 			}

@@ -8,7 +8,6 @@ package keygen
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 
 	errors2 "github.com/pkg/errors"
@@ -57,7 +56,7 @@ func (round *round2) Start() *tss.Error {
 	r2msg2 := NewKGRound2Message2(round.PartyID(), round.temp.deCommitPolyG, pii)
 	round.temp.kgRound2Message2s[i] = r2msg2
 	round.out <- r2msg2
-	fmt.Printf("\n ROUND 2 \n")
+	// fmt.Printf("\n ROUND 2 \n")
 
 	return nil
 }
