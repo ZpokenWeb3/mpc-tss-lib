@@ -1,42 +1,23 @@
-// Copyright © 2019 Binance
-//
-// This file is part of Binance. The full Binance copyright notice, including
-// terms governing use, modification, and redistribution, is contained in the
-// file LICENSE at the root of the source code distribution tree.
-
 package keygen
 
 import (
-	"encoding/json"
 	"fmt"
 	"math/big"
-	"os"
 	"runtime"
 	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/crypto/vss"
 	"github.com/bnb-chain/tss-lib/v2/test"
 	"github.com/bnb-chain/tss-lib/v2/tss"
-	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ipfs/go-log"
-	"github.com/stretchr/testify/assert"
+	iden3bjj "github.com/iden3/go-iden3-crypto/babyjub"
 )
 
-const (
-	testParticipants = TestParticipants
-	testThreshold    = TestThreshold
-)
-
-func setUp(level string) {
-	if err := log.SetLogLevel("tss-lib", level); err != nil {
-		panic(err)
-	}
-}
-
-func TestE2EConcurrentAndSaveFixtures(t *testing.T) {
+func TestBJJ(t *testing.T) {
 	setUp("info")
 
 	threshold := testThreshold
@@ -60,7 +41,7 @@ func TestE2EConcurrentAndSaveFixtures(t *testing.T) {
 	// init the parties
 	for i := 0; i < len(pIDs); i++ {
 		var P *LocalParty
-		params := tss.NewParameters(tss.Edwards(), p2pCtx, pIDs[i], len(pIDs), threshold)
+		params := tss.NewParameters(tss.BabyJubJub(), p2pCtx, pIDs[i], len(pIDs), threshold)
 		if i < len(fixtures) {
 			P = NewLocalParty(params, outCh, endCh).(*LocalParty)
 		} else {
@@ -130,17 +111,17 @@ keygen:
 						}
 						pShares = append(pShares, shareStruct)
 					}
-					uj, err := pShares[:threshold+1].ReConstruct(tss.Edwards())
+					uj, err := pShares[:threshold+1].ReConstruct(tss.BabyJubJub())
 					assert.NoError(t, err, "vss.ReConstruct should not throw error")
 
 					// uG test: u*G[j] == V[0]
 					assert.Equal(t, uj, Pj.temp.ui)
-					uG := crypto.ScalarBaseMult(tss.Edwards(), uj)
+					uG := crypto.ScalarBaseMult(tss.BabyJubJub(), uj)
 					assert.True(t, uG.Equals(Pj.temp.vs[0]), "ensure u*G[j] == V_0")
 
 					// xj tests: BigXj == xj*G
 					xj := Pj.data.Xi
-					gXj := crypto.ScalarBaseMult(tss.Edwards(), xj)
+					gXj := crypto.ScalarBaseMult(tss.BabyJubJub(), xj)
 					BigXj := Pj.data.BigXj[j]
 					assert.True(t, BigXj.Equals(gXj), "ensure BigX_j == g^x_j")
 
@@ -148,39 +129,35 @@ keygen:
 					{
 						badShares := pShares[:threshold]
 						badShares[len(badShares)-1].Share.Set(big.NewInt(0))
-						uj, err := pShares[:threshold].ReConstruct(tss.Edwards())
+						uj, err := pShares[:threshold].ReConstruct(tss.BabyJubJub())
 						assert.NoError(t, err)
 						assert.NotEqual(t, parties[j].temp.ui, uj)
-						BigXjX, BigXjY := tss.Edwards().ScalarBaseMult(uj.Bytes())
+						BigXjX, BigXjY := tss.BabyJubJub().ScalarBaseMult(uj.Bytes())
 						assert.NotEqual(t, BigXjX, Pj.temp.vs[0].X())
 						assert.NotEqual(t, BigXjY, Pj.temp.vs[0].Y())
 					}
 					u = new(big.Int).Add(u, uj)
 				}
-				u = new(big.Int).Mod(u, tss.Edwards().Params().N)
+				u = new(big.Int).Mod(u, tss.BabyJubJub().Params().N)
 				scalar := make([]byte, 0, 32)
 				copy(scalar, u.Bytes())
 
 				// build eddsa key pair
 				pkX, pkY := save.EDDSAPub.X(), save.EDDSAPub.Y()
-				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
-					X:     pkX,
-					Y:     pkY,
+				pk := iden3bjj.PublicKey{
+					X: pkX,
+					Y: pkY,
 				}
-
 				println("u len: ", len(u.Bytes()))
-				sk, _, err := edwards.PrivKeyFromScalar(common.PadToLengthBytesInPlace(u.Bytes(), 32))
-				if !assert.NoError(t, err) {
-					return
-				}
+
+				sk := iden3bjj.NewPrivKeyScalar(u)
 
 				// test pub key, should be on curve and match pkX, pkY
-				assert.True(t, pk.IsOnCurve(pkX, pkY), "public key must be on curve")
+				assert.True(t, pk.Point().InCurve(), "public key must be on curve")
 
 				// public key tests
 				assert.NotZero(t, u, "u should not be zero")
-				ourPkX, ourPkY := tss.Edwards().ScalarBaseMult(u.Bytes())
+				ourPkX, ourPkY := tss.BabyJubJub().ScalarBaseMult(u.Bytes())
 				assert.Equal(t, pkX, ourPkX, "pkX should match expected pk derived from u")
 				assert.Equal(t, pkY, ourPkY, "pkY should match expected pk derived from u")
 				t.Log("Public key tests done.")
@@ -193,45 +170,22 @@ keygen:
 				t.Log("Public key distribution test done.")
 
 				// test sign/verify
-				data := make([]byte, 32)
-				for i := range data {
-					data[i] = byte(i)
+				data_bytes := make([]byte, 32)
+				for i := range data_bytes {
+					data_bytes[i] = byte(i)
 				}
-				r, s, err := edwards.Sign(sk, data)
-				assert.NoError(t, err, "sign should not throw an error")
-				ok := edwards.Verify(&pk, data, r, s)
+				data := new(big.Int).SetBytes(data_bytes)
+
+				sig := sk.SignPoseidonScalar(data)
+
+				ok := pk.VerifyPoseidon(data, sig)
 				assert.True(t, ok, "signature should be ok")
-				t.Log("EDDSA signing test for ed25519 done.")
+				t.Log("EDDSA signing test for BabyJubJub done.")
 
 				t.Logf("Start goroutines: %d, End goroutines: %d", startGR, runtime.NumGoroutine())
 
 				break keygen
 			}
 		}
-	}
-}
-
-func tryWriteTestFixtureFile(t *testing.T, index int, data LocalPartySaveData) {
-	fixtureFileName := makeTestFixtureFilePath(index)
-
-	// fixture file does not already exist?
-	// if it does, we won't re-create it here
-	fi, err := os.Stat(fixtureFileName)
-	if !(err == nil && fi != nil && !fi.IsDir()) {
-		fd, err := os.OpenFile(fixtureFileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
-		if err != nil {
-			assert.NoErrorf(t, err, "unable to open fixture file %s for writing", fixtureFileName)
-		}
-		bz, err := json.Marshal(&data)
-		if err != nil {
-			t.Fatalf("unable to marshal save data for fixture file %s", fixtureFileName)
-		}
-		_, err = fd.Write(bz)
-		if err != nil {
-			t.Fatalf("unable to write to fixture file %s", fixtureFileName)
-		}
-		t.Logf("Saved a test fixture file for party %d: %s", index, fixtureFileName)
-	} else {
-		t.Logf("Fixture file already exists for party %d; not re-creating: %s", index, fixtureFileName)
 	}
 }
