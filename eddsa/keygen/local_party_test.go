@@ -15,15 +15,14 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ipfs/go-log"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/crypto/vss"
 	"github.com/bnb-chain/tss-lib/v2/test"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/ipfs/go-log"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -169,6 +168,7 @@ keygen:
 					X:     pkX,
 					Y:     pkY,
 				}
+
 				println("u len: ", len(u.Bytes()))
 				sk, _, err := edwards.PrivKeyFromScalar(common.PadToLengthBytesInPlace(u.Bytes(), 32))
 				if !assert.NoError(t, err) {
@@ -201,7 +201,7 @@ keygen:
 				assert.NoError(t, err, "sign should not throw an error")
 				ok := edwards.Verify(&pk, data, r, s)
 				assert.True(t, ok, "signature should be ok")
-				t.Log("EDDSA signing test done.")
+				t.Log("EDDSA signing test for ed25519 done.")
 
 				t.Logf("Start goroutines: %d, End goroutines: %d", startGR, runtime.NumGoroutine())
 
@@ -234,5 +234,4 @@ func tryWriteTestFixtureFile(t *testing.T, index int, data LocalPartySaveData) {
 	} else {
 		t.Logf("Fixture file already exists for party %d; not re-creating: %s", index, fixtureFileName)
 	}
-	//
 }
