@@ -69,6 +69,16 @@ func copyBytes(aB []byte) *[32]byte {
 	return s
 }
 
+func bigIntToFixedBytes(n *big.Int, size int) []byte {
+	b := n.Bytes()
+	if len(b) > size {
+		b = b[len(b)-size:] // truncate if longer
+	}
+	padded := make([]byte, size)
+	copy(padded[size-len(b):], b)
+	return padded
+}
+
 func ecPointToEncodedBytes(x *big.Int, y *big.Int) *[32]byte {
 	s := bigIntToEncodedBytes(y)
 	xB := bigIntToEncodedBytes(x)

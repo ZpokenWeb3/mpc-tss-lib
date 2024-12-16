@@ -121,30 +121,53 @@ signing:
 				// END check s correctness
 
 				// BEGIN Poseidon-based EDDSA verify
-				poseidonHash, err := poseidon.HashBytes(msg.Bytes()) // Confirm this matches round3 implementation
+				// BEGIN Poseidon-based EDDSA verify (custom verification)
+				poseidonHash, err := poseidon.HashBytes(msg.Bytes())
 				if err != nil {
 					t.Fatalf("Poseidon hashing failed: %v", err)
 				}
 
-				pkX, pkY := keys[0].EDDSAPub.X(), keys[0].EDDSAPub.Y()
-				pk := edwards.PublicKey{
-					Curve: tss.Edwards(),
-					X:     pkX,
-					Y:     pkY,
-				}
+				// Reduce the poseidon hash mod the group order `L`
+				order := tss.Edwards().Params().N
+				h := new(big.Int).Mod(new(big.Int).SetBytes(poseidonHash.Bytes()), order)
 
+				// Extract R, S from the signature
 				newSig, err := edwards.ParseSignature(parties[0].data.Signature)
 				if err != nil {
-					println("new sig error, ", err.Error())
+					t.Fatalf("Error parsing signature: %v", err)
 				}
 
-				ok := edwards.Verify(&pk, poseidonHash.Bytes(), newSig.R, newSig.S)
-				assert.True(t, ok, "Poseidon-based EDDSA verify must pass")
+				// Reconstruct R as a point. The `R` in an EdDSA signature is a compressed point.
+				// Convert `newSig.R` back to 32-byte form and parse as a public key.
+				RBytes := bigIntToFixedBytes(newSig.R, 32)
+				RPoint, err := edwards.ParsePubKey(RBytes)
+				if err != nil {
+					t.Fatalf("Failed to parse R as a point: %v", err)
+				}
 
-				t.Log("Poseidon-based EDDSA signing test done.")
-				// END Poseidon-based EDDSA verify
+				// A is the public key of the signer
+				pkX, pkY := keys[0].EDDSAPub.X(), keys[0].EDDSAPub.Y()
+				APoint := &edwards.PublicKey{Curve: tss.Edwards(), X: pkX, Y: pkY}
 
-				break signing
+				// s is a scalar
+				s := new(big.Int).Set(newSig.S)
+
+				// Compute s·B (B is the base point)
+				sB_x, sB_y := tss.Edwards().ScalarBaseMult(s.Bytes())
+
+				// Compute h·A
+				hA_x, hA_y := tss.Edwards().ScalarMult(APoint.X, APoint.Y, h.Bytes())
+
+				// Compute R + hA
+				RplusHAtX, RplusHAtY := tss.Edwards().Add(RPoint.X, RPoint.Y, hA_x, hA_y)
+
+				// Check equality: R + hA == s·B ?
+				if RplusHAtX.Cmp(sB_x) == 0 && RplusHAtY.Cmp(sB_y) == 0 {
+					t.Log("Poseidon-based EDDSA signing test done (custom verification).")
+				} else {
+					t.Fatal("Poseidon-based EDDSA verify failed (custom verification).")
+				}
+
 			}
 		}
 	}
