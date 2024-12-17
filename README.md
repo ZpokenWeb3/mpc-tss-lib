@@ -127,15 +127,7 @@ go func() {
 }()
 ```
 ## Benchmarks
-Performance Benchmarks
-Runtime Environment
-OS: macOS
-Architecture: intel64
-CPU: Intel Core i9-9880H @ 4.5 GHz
-Participants: 5
-Threshold: 3
-
-## Runtime Environment
+# Runtime Environment
 
 - **OS**: macOS  
 - **Architecture**: `intel64`  
