@@ -18,9 +18,11 @@ Signatures:
 - [x] ECDSA
 - [x] EdDSA
 - [ ] BLS
-
+- [ ] RSA signatures    
+    - [ ] PSS
+    - [ ] PKCS1v15
 Hashes:
-- [ ] Poseidon
+- [x] Poseidon
 
 Elliptic curves:
 - [x] Baby Jubjub Elliptic Curve
