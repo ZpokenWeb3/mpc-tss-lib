@@ -126,9 +126,10 @@ go func() {
     // handle err ...
 }()
 ```
-
 ⚠️ During re-sharing the key data may be modified during the rounds. Do not ever overwrite any data saved on disk until the final struct has been received through the `end` channel.
 
+##Benchmarks
+ - [View Benchmarks](./benchmark.md)
 ## Messaging
 In these examples the `outCh` will collect outgoing messages from the party and the `endCh` will receive save data or a signature when the protocol is complete.
 
