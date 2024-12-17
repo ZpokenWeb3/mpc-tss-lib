@@ -163,9 +163,9 @@ go func() {
 
 | Operation                      | Runtime/iteration | Iterations | Total Time   | Notes                                      |
 |--------------------------------|-------------------|------------|-------------:|--------------------------------------------|
-| **Key Generation**             | —                 | —          | —            | TBD                                        |
+| **Key Generation**             | 18.9226ms                 | —          | 189.226ms            | TBD                                        |
 | **Resharing**                  | —                 | —          | —            | TBD                                        |
-| **Verification (Poseidon)**    | —                 | —          | —            | TBD                                        |
+| **Verification (Poseidon)**    | 1.143372ms                 | —          | 11.43372ms            | TBD                                        |
 
 ---
 
