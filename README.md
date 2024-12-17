@@ -126,8 +126,8 @@ go func() {
     // handle err ...
 }()
 ```
-## Benchmarks
-# Runtime Environment
+# Benchmarks
+## Runtime Environment
 
 - **OS**: macOS  
 - **Architecture**: `intel64`  
