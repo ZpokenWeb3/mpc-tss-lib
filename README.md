@@ -23,7 +23,7 @@ Hashes:
 - [ ] Poseidon
 
 Elliptic curves:
-- [ ] Baby Jubjub Elliptic Curve
+- [x] Baby Jubjub Elliptic Curve
 - [ ] BLS12-377
 - [ ] BLS12-381
 
