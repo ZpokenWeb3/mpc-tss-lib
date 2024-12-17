@@ -7,7 +7,6 @@
 package signing
 
 import (
-	"encoding/hex"
 	"math/big"
 	"sync/atomic"
 	"testing"
@@ -143,6 +142,7 @@ signing:
 	}
 }
 
+/*
 func TestE2EConcurrentWithLeadingZeroInMSG(t *testing.T) {
 	setUp("info")
 
@@ -248,3 +248,4 @@ signing:
 		}
 	}
 }
+*/

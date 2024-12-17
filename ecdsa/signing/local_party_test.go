@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/ipfs/go-log"
@@ -42,7 +43,9 @@ func TestE2EConcurrent(t *testing.T) {
 	threshold := testThreshold
 
 	// PHASE: load keygen fixtures
+	keygenStart := time.Now()
 	keys, signPIDs, err := keygen.LoadKeygenTestFixturesRandomSet(testThreshold+1, testParticipants)
+	fmt.Printf("Keygen/fixture loading took: %s\n", time.Since(keygenStart))
 	assert.NoError(t, err, "should load keygen fixtures")
 	assert.Equal(t, testThreshold+1, len(keys))
 	assert.Equal(t, testThreshold+1, len(signPIDs))
@@ -57,7 +60,9 @@ func TestE2EConcurrent(t *testing.T) {
 	endCh := make(chan *common.SignatureData, len(signPIDs))
 
 	updater := test.SharedPartyUpdater
-	// init the parties
+
+	// Measure party initialization time
+	initStart := time.Now()
 	for i := 0; i < len(signPIDs); i++ {
 		params := tss.NewParameters(tss.S256(), p2pCtx, signPIDs[i], len(signPIDs), threshold)
 		P := NewLocalParty(big.NewInt(42), params, keys[i], outCh, endCh).(*LocalParty)
@@ -68,8 +73,12 @@ func TestE2EConcurrent(t *testing.T) {
 			}
 		}(P)
 	}
+	fmt.Printf("Party initialization took: %s\n", time.Since(initStart))
 
+	// Measure total signing duration
+	signingStart := time.Now()
 	var ended int32
+
 signing:
 	for {
 		fmt.Printf("ACTIVE GOROUTINES: %d\n", runtime.NumGoroutine())
@@ -80,6 +89,7 @@ signing:
 			break signing
 
 		case msg := <-outCh:
+			msgStart := time.Now()
 			dest := msg.GetTo()
 			if dest == nil {
 				for _, P := range parties {
@@ -94,10 +104,14 @@ signing:
 				}
 				go updater(parties[dest[0].Index], msg, errCh)
 			}
+			fmt.Printf("Message propagation took: %s\n", time.Since(msgStart))
 
 		case <-endCh:
 			atomic.AddInt32(&ended, 1)
 			if atomic.LoadInt32(&ended) == int32(len(signPIDs)) {
+				totalSigningTime := time.Since(signingStart)
+				fmt.Printf("Total signing duration: %s\n", totalSigningTime)
+
 				t.Logf("Done. Received signature data from %d participants", ended)
 				R := parties[0].temp.bigR
 				r := parties[0].temp.rx
@@ -114,6 +128,7 @@ signing:
 				// END check s correctness
 
 				// BEGIN ECDSA verify
+				verifyStart := time.Now()
 				pkX, pkY := keys[0].ECDSAPub.X(), keys[0].ECDSAPub.Y()
 				pk := ecdsa.PublicKey{
 					Curve: tss.EC(),
@@ -121,6 +136,7 @@ signing:
 					Y:     pkY,
 				}
 				ok := ecdsa.Verify(&pk, big.NewInt(42).Bytes(), R.X(), sumS)
+				fmt.Printf("ECDSA verification took: %s\n", time.Since(verifyStart))
 				assert.True(t, ok, "ecdsa verify must pass")
 				t.Log("ECDSA signing test done.")
 				// END ECDSA verify
