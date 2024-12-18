@@ -7,9 +7,13 @@
 - **Participants**: `5`  
 - **Threshold**: `3`  
 
+**SHA**: A cryptographic hash function, specifically **truncated SHA-512 (256-bit)**
+
+**Poseidon**: A hash function designed for **ZK-friendly operations**. In the same context of generating the **SSID** (as a replacement for SHA).
+
 ---
 
-## ECDSA + SHA / Poseidon
+## ECDSA (secp256k1)
 
 | Operation                      | Runtime/iteration | Iterations | Total Time   |
 |--------------------------------|-------------------|------------|-------------:|
@@ -20,7 +24,7 @@
 
 ---
 
-## EDDSA + SHA / Poseidon
+## EdDSA (ed25519)
 
 | Operation                      | Runtime/iteration | Iterations | Total Time   | Notes                                      |
 |--------------------------------|-------------------|------------|-------------:|--------------------------------------------|
@@ -31,7 +35,7 @@
 
 ---
 
-## BabyJubJub + Poseidon
+## EdDSA (Baby Jubjub)
 
 | Operation                      | Runtime/iteration | Iterations | Total Time   | Notes                                      |
 |--------------------------------|-------------------|------------|-------------:|--------------------------------------------|
