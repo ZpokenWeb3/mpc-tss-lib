@@ -29,6 +29,9 @@ Elliptic curves:
 - [ ] BLS12-377
 - [ ] BLS12-381
 
+## Benchmarks 
+The available benchmarks for the signature schemes can be viewed [here](https://github.com/ZpokenWeb3/mpc-tss-lib/blob/master/benchmark.md#benchmarks).
+
 ## Introduction
 This is an implementation of multi-party {t,n}-threshold ECDSA (Elliptic Curve Digital Signature Algorithm) based on Gennaro and Goldfeder CCS 2018 [1] and EdDSA (Edwards-curve Digital Signature Algorithm) following a similar approach.
 
