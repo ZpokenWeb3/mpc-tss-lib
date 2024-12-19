@@ -14,6 +14,7 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/crypto/commitments"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
@@ -40,24 +41,35 @@ func (round *round1) Start() *tss.Error {
 	if err != nil {
 		return round.WrapError(err)
 	}
+
 	// 1. select ri
 	ri := common.GetRandomPositiveInt(round.Rand(), round.Params().EC().Params().N)
 
 	// 2. make commitment
 	pointRi := crypto.ScalarBaseMult(round.Params().EC(), ri)
-	cmt := commitments.NewHashCommitment(round.Rand(), pointRi.X(), pointRi.Y())
 
-	// 3. store r1 message pieces
-	round.temp.ri = ri
-	round.temp.pointRi = pointRi
+	// Combine X and Y coordinates of pointRi into byte slices
+	xBytes := pointRi.X().Bytes()
+	yBytes := pointRi.Y().Bytes()
+
+	// Use Poseidon to hash the combined coordinates
+	poseidonHash, err := poseidon.HashBytes(append(xBytes, yBytes...))
+	if err != nil {
+		return round.WrapError(fmt.Errorf("poseidon hash computation failed: %v", err))
+	}
+
+	// Create the commitment using Poseidon hash
+	cmt := commitments.HashCommitDecommit{
+		C: new(big.Int).SetBytes(poseidonHash.Bytes()),                              // Convert Poseidon hash to *big.Int
+		D: []*big.Int{new(big.Int).SetBytes(xBytes), new(big.Int).SetBytes(yBytes)}, // X and Y as []*big.Int
+	}
+
+	// Store the deCommit value
 	round.temp.deCommit = cmt.D
 
-	i := round.PartyID().Index
-	round.ok[i] = true
-
 	// 4. broadcast commitment
-	r1msg2 := NewSignRound1Message(round.PartyID(), cmt.C)
-	round.temp.signRound1Messages[i] = r1msg2
+	r1msg2 := NewSignRound1Message(round.PartyID(), cmt.C) // Pass cmt.C directly
+	round.temp.signRound1Messages[round.PartyID().Index] = r1msg2
 	round.out <- r1msg2
 
 	return nil

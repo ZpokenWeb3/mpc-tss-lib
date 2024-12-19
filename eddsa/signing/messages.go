@@ -13,6 +13,7 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	cmt "github.com/bnb-chain/tss-lib/v2/crypto/commitments"
+	"github.com/bnb-chain/tss-lib/v2/crypto/poseidon"
 	"github.com/bnb-chain/tss-lib/v2/crypto/schnorr"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
@@ -33,40 +34,37 @@ var (
 
 func NewSignRound1Message(
 	from *tss.PartyID,
-	commitment cmt.HashCommitment,
+	commitment *big.Int,
 ) tss.ParsedMessage {
 	meta := tss.MessageRouting{
 		From:        from,
 		IsBroadcast: true,
 	}
 	content := &SignRound1Message{
-		Commitment: commitment.Bytes(),
+		Commitment: commitment.Bytes(), // Convert `*big.Int` to `[]byte`
 	}
 	msg := tss.NewMessageWrapper(meta, content)
 	return tss.NewMessage(meta, content, msg)
-}
-
-func (m *SignRound1Message) ValidateBasic() bool {
-	return m.Commitment != nil &&
-		common.NonEmptyBytes(m.GetCommitment())
-}
-
-func (m *SignRound1Message) UnmarshalCommitment() *big.Int {
-	return new(big.Int).SetBytes(m.GetCommitment())
 }
 
 // ----- //
 
 func NewSignRound2Message(
 	from *tss.PartyID,
-	deCommitment cmt.HashDeCommitment,
+	deCommitment []*big.Int, // Updated to match new input
 	proof *schnorr.ZKProof,
 ) tss.ParsedMessage {
 	meta := tss.MessageRouting{
 		From:        from,
 		IsBroadcast: true,
 	}
-	dcBzs := common.BigIntsToBytes(deCommitment)
+	// Compute Poseidon hash for each deCommitment component
+	dcBzs := make([][]byte, len(deCommitment))
+	for i, dc := range deCommitment {
+		poseidonHash, _ := poseidon.HashBytes(dc.Bytes()) // Assuming error handled elsewhere
+		dcBzs[i] = poseidonHash.Bytes()
+	}
+
 	content := &SignRound2Message{
 		DeCommitment: dcBzs,
 		ProofAlphaX:  proof.Alpha.X().Bytes(),
@@ -78,11 +76,13 @@ func NewSignRound2Message(
 }
 
 func (m *SignRound2Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyMultiBytes(m.DeCommitment, 3) &&
+	return common.NonEmptyMultiBytes(m.DeCommitment, 3) &&
 		common.NonEmptyBytes(m.ProofAlphaX) &&
 		common.NonEmptyBytes(m.ProofAlphaY) &&
 		common.NonEmptyBytes(m.ProofT)
+}
+func (m *SignRound1Message) UnmarshalCommitment() *big.Int {
+	return new(big.Int).SetBytes(m.Commitment)
 }
 
 func (m *SignRound2Message) UnmarshalDeCommitment() []*big.Int {
@@ -122,10 +122,13 @@ func NewSignRound3Message(
 }
 
 func (m *SignRound3Message) ValidateBasic() bool {
-	return m != nil &&
-		common.NonEmptyBytes(m.S)
+	return common.NonEmptyBytes(m.S)
 }
 
 func (m *SignRound3Message) UnmarshalS() *big.Int {
 	return new(big.Int).SetBytes(m.S)
+}
+
+func (m *SignRound1Message) ValidateBasic() bool {
+	return m.Commitment != nil && common.NonEmptyBytes(m.Commitment)
 }

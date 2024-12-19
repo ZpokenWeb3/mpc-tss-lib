@@ -29,7 +29,7 @@ func (round *round2) Start() *tss.Error {
 	// 1. store r1 message pieces
 	for j, msg := range round.temp.signRound1Messages {
 		r1msg := msg.Content().(*SignRound1Message)
-		round.temp.cjs[j] = r1msg.UnmarshalCommitment()
+		round.temp.cjs[j] = r1msg.UnmarshalCommitment() // Now cjs[j] is *big.Int
 	}
 
 	// 2. compute Schnorr prove

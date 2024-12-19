@@ -103,22 +103,31 @@ func (round *base) resetOK() {
 	}
 }
 
-var fieldModulus = new(big.Int).SetBytes([]byte{
-	0x24, 0x03, 0x4b, 0x62, 0xb0, 0x00, 0x00, 0x00,
-	0x18, 0x00, 0x00, 0x00, 0xa8, 0x00, 0x00, 0x00,
-	0x01, 0xd8, 0x00, 0x00, 0x00, 0x4f, 0x00, 0x00,
-	0x00, 0x3b, 0x00, 0x00, 0x00, 0x01,
-})
+// get ssid from local params
+// func (round *base) getSSID() ([]byte, error) {
+// 	ssidList := []*big.Int{round.EC().Params().P, round.EC().Params().N, round.EC().Params().Gx, round.EC().Params().Gy} // ec curve
+// 	ssidList = append(ssidList, round.Parties().IDs().Keys()...)                                                         // parties
+// 	BigXjList, err := crypto.FlattenECPoints(round.key.BigXj)
+// 	if err != nil {
+// 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
+// 	}
+// 	ssidList = append(ssidList, BigXjList...)                    // BigXj
+// 	ssidList = append(ssidList, big.NewInt(int64(round.number))) // round number
+// 	ssidList = append(ssidList, round.temp.ssidNonce)
+// 	ssid := common.SHA512_256i(ssidList...).Bytes()
 
-// get ssid from local params using Poseidon hash
+// 	return ssid, nil
+// }
+
 func (round *base) getSSID() ([]byte, error) {
 	ssidList := []*big.Int{
 		round.EC().Params().P,
 		round.EC().Params().N,
 		round.EC().Params().Gx,
-		round.EC().Params().Gy, // EC curve
-	}
-	ssidList = append(ssidList, round.Parties().IDs().Keys()...) // Parties
+		round.EC().Params().Gy,
+	} // EC curve params
+
+	ssidList = append(ssidList, round.Parties().IDs().Keys()...) // Party keys
 	BigXjList, err := crypto.FlattenECPoints(round.key.BigXj)
 	if err != nil {
 		return nil, round.WrapError(errors.New("read BigXj failed"), round.PartyID())
@@ -127,21 +136,24 @@ func (round *base) getSSID() ([]byte, error) {
 	ssidList = append(ssidList, big.NewInt(int64(round.number))) // Round number
 	ssidList = append(ssidList, round.temp.ssidNonce)
 
-	// Validate and reduce inputs modulo the hardcoded field modulus
-	validatedInputs := []*big.Int{}
-	for _, item := range ssidList {
-		reduced := new(big.Int).Mod(item, fieldModulus)
-		if reduced.Sign() < 0 {
-			reduced.Add(reduced, fieldModulus)
-		}
-		validatedInputs = append(validatedInputs, reduced)
-	}
+	// Convert `ssidList` to a flattened byte slice for Poseidon hashing
+	ssidBytes := common.BigIntsToBytes(ssidList)
+	flattenedBytes := flattenBytes(ssidBytes)
 
-	// Compute Poseidon hash
-	ssidHash, err := poseidon.Hash(validatedInputs)
+	// Use Poseidon hash
+	poseidonHash, err := poseidon.HashBytes(flattenedBytes)
 	if err != nil {
-		return nil, round.WrapError(errors.New("Poseidon hashing failed"), round.PartyID())
+		return nil, round.WrapError(errors.New("Poseidon hash computation failed"), round.PartyID())
 	}
 
-	return ssidHash.Bytes(), nil
+	return poseidonHash.Bytes(), nil
+}
+
+// Helper function to flatten [][]byte into []byte
+func flattenBytes(byteSlices [][]byte) []byte {
+	var flattened []byte
+	for _, b := range byteSlices {
+		flattened = append(flattened, b...)
+	}
+	return flattened
 }

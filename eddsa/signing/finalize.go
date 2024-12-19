@@ -44,65 +44,44 @@ func (round *finalization) Start() *tss.Error {
 	round.data.R = round.temp.r.Bytes()
 	round.data.S = s.Bytes()
 
-	var MBytes []byte
-	if round.temp.fullBytesLen == 0 {
-		MBytes = round.temp.m.Bytes()
-	} else {
-		mBytes := make([]byte, round.temp.fullBytesLen)
-		round.temp.m.FillBytes(mBytes)
-		MBytes = mBytes
-	}
-	round.data.M = MBytes
+	fmt.Printf("Message before hashing: %x\n", round.temp.m.Bytes())
 
-	pkX, pkY := round.key.EDDSAPub.X(), round.key.EDDSAPub.Y()
+	// Use Poseidon to hash the message
+	// Pad the message to a fixed length before hashing
+	msgBytes := round.temp.m.Bytes()
+	paddedMsg := make([]byte, 32) // Poseidon often expects 32-byte inputs
+	copy(paddedMsg[32-len(msgBytes):], msgBytes)
+
+	poseidonHash, err := poseidon.HashBytes(paddedMsg)
+	if err != nil {
+		return round.WrapError(fmt.Errorf("poseidon hash computation failed: %v", err))
+	}
+
+	if err != nil {
+		return round.WrapError(fmt.Errorf("poseidon hash computation failed: %v", err))
+	}
+
+	// Convert Poseidon hash output to the appropriate format
+	round.data.M = poseidonHash.Bytes()
+
 	pk := edwards.PublicKey{
 		Curve: round.Params().EC(),
-		X:     pkX,
-		Y:     pkY,
+		X:     round.key.EDDSAPub.X(),
+		Y:     round.key.EDDSAPub.Y(),
+
+		// Verify the signature using Poseidon hash for the message
 	}
-
-	// Perform Poseidon-based signature verification
-	order := round.Params().EC().Params().N
-
-	// Convert R to 32-byte array
-	RBytes := bigIntToFixedBytes(round.temp.r, 32)
-
-	// Convert public key to bytes
-	pkXBytes := pkX.Bytes()
-	pkYBytes := pkY.Bytes()
-	pubKeyBytes := append(pkXBytes, pkYBytes...)
-
-	// Recompute Poseidon hash h = Poseidon(R || A || M)
-	poseidonInputs := [][]byte{RBytes, pubKeyBytes, MBytes}
-	poseidonHash, err := poseidon.HashBytes(flattenByteSlices(poseidonInputs))
+	poseidonHashBytes := round.data.M
 	if err != nil {
-		return round.WrapError(err)
+		return round.WrapError(fmt.Errorf("poseidon hash computation failed during verification: %v", err))
 	}
 
-	h := new(big.Int).Mod(new(big.Int).SetBytes(poseidonHash.Bytes()), order)
-
-	// Parse R as a point on Edwards curve
-	RPoint, err := edwards.ParsePubKey(RBytes)
-	if err != nil {
-		return round.WrapError(err)
-	}
-
-	// Compute s·B
-	sB_x, sB_y := round.Params().EC().ScalarBaseMult(s.Bytes())
-
-	// Compute h·A
-	hA_x, hA_y := round.Params().EC().ScalarMult(pk.X, pk.Y, h.Bytes())
-
-	// Compute R + hA
-	RplusHAtX, RplusHAtY := round.Params().EC().Add(RPoint.X, RPoint.Y, hA_x, hA_y)
-
-	// Check equality: R + hA == s·B ?
-	if RplusHAtX.Cmp(sB_x) != 0 || RplusHAtY.Cmp(sB_y) != 0 {
+	ok := edwards.Verify(&pk, poseidonHashBytes, round.temp.r, s)
+	if !ok {
 		return round.WrapError(fmt.Errorf("poseidon-based signature verification failed"))
 	}
-
-	// If we reach here, verification succeeded
 	round.end <- round.data
+
 	return nil
 }
 

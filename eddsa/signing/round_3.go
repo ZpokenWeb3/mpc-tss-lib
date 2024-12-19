@@ -19,25 +19,6 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
 
-// flattenByteSlices concatenates slices of bytes into a single slice
-func flattenByteSlices(slices [][]byte) []byte {
-	totalLength := 0
-	for _, slice := range slices {
-		if len(slice) == 0 {
-			panic("empty slice detected in Poseidon inputs")
-		}
-		totalLength += len(slice)
-	}
-
-	flattened := make([]byte, totalLength)
-	offset := 0
-	for _, slice := range slices {
-		copy(flattened[offset:], slice)
-		offset += len(slice)
-	}
-	return flattened
-}
-
 func (round *round3) Start() *tss.Error {
 	if round.started {
 		return round.WrapError(errors.New("round already started"))
@@ -47,12 +28,12 @@ func (round *round3) Start() *tss.Error {
 	round.started = true
 	round.resetOK()
 
-	// 1. Initialize R
+	// 1. init R
 	var R edwards25519.ExtendedGroupElement
 	riBytes := bigIntToEncodedBytes(round.temp.ri)
 	edwards25519.GeScalarMultBase(&R, riBytes)
 
-	// 2-6. Compute R
+	// 2-6. compute R
 	i := round.PartyID().Index
 	for j, Pj := range round.Parties().IDs() {
 		if j == i {
@@ -89,48 +70,64 @@ func (round *round3) Start() *tss.Error {
 		R = addExtendedElements(R, extendedRj)
 	}
 
-	// 7. Compute lambda using Poseidon
+	// 7. compute lambda
 	var encodedR [32]byte
 	R.ToBytes(&encodedR)
 	encodedPubKey := ecPointToEncodedBytes(round.key.EDDSAPub.X(), round.key.EDDSAPub.Y())
 
+	// h = hash512(k || A || M)
+	// h := sha512.New()
+	// h.Reset()
+	// h.Write(encodedR[:])
+	// h.Write(encodedPubKey[:])
+	// if round.temp.fullBytesLen == 0 {
+	// 	h.Write(round.temp.m.Bytes())
+	// } else {
+	// 	var mBytes = make([]byte, round.temp.fullBytesLen)
+	// 	round.temp.m.FillBytes(mBytes)
+	// 	h.Write(mBytes)
+	// }
+
+	// var lambda [64]byte
+	// h.Sum(lambda[:0])
+	// var lambdaReduced [32]byte
+	// edwards25519.ScReduce(&lambdaReduced, &lambda)
 	// Prepare inputs for Poseidon
-	poseidonInputs := [][]byte{encodedR[:], encodedPubKey[:]}
+	// Prepare inputs for Poseidon
+	input := append(encodedR[:], encodedPubKey[:]...)
 	if round.temp.fullBytesLen == 0 {
-		poseidonInputs = append(poseidonInputs, round.temp.m.Bytes())
+		input = append(input, round.temp.m.Bytes()...)
 	} else {
-		mBytes := make([]byte, round.temp.fullBytesLen)
+		var mBytes = make([]byte, round.temp.fullBytesLen)
 		round.temp.m.FillBytes(mBytes)
-		poseidonInputs = append(poseidonInputs, mBytes)
+		input = append(input, mBytes...)
 	}
 
-	// Perform Poseidon hashing
-	poseidonHash, err := poseidon.HashBytes(flattenByteSlices(poseidonInputs))
+	// Compute Poseidon hash
+	poseidonHash, err := poseidon.HashBytes(input)
 	if err != nil {
-		return round.WrapError(errors.Wrap(err, "Poseidon hashing failed"))
+		return round.WrapError(errors.New("Poseidon hash computation failed"))
 	}
 
-	// Convert Poseidon hash to a [64]byte array
-	var lambda [64]byte
-	copy(lambda[:], poseidonHash.Bytes())
-	common.Logger.Infof("Poseidon Hash (lambda): %x", lambda)
+	// Convert Poseidon hash output into a 64-byte array
+	var poseidonHashBytes [64]byte
+	copy(poseidonHashBytes[:], poseidonHash.Bytes())
 
-	// Reduce the hash output to a scalar
+	// Reduce the hash output into 32 bytes
 	var lambdaReduced [32]byte
-	edwards25519.ScReduce(&lambdaReduced, &lambda)
+	edwards25519.ScReduce(&lambdaReduced, &poseidonHashBytes)
 
-	// 8. Compute si
+	// Perform the scalar multiplication and addition
 	var localS [32]byte
-	edwards25519.ScMulAdd(&localS, &lambdaReduced, bigIntToEncodedBytes(round.temp.wi), riBytes)
-	common.Logger.Infof("Reduced lambda: %x", lambdaReduced)
+	wiBytes := bigIntToEncodedBytes(round.temp.wi)
+	riBytes = bigIntToEncodedBytes(round.temp.ri)
+	edwards25519.ScMulAdd(&localS, &lambdaReduced, wiBytes, riBytes)
 
-	// 9. Store r3 message pieces
+	// Store si and R
 	round.temp.si = &localS
 	round.temp.r = encodedBytesToBigInt(&encodedR)
-	common.Logger.Infof("Computed si: %x", localS)
-	common.Logger.Infof("Inputs to Poseidon hash: R=%x, PubKey=%x, Message=%x", encodedR[:], encodedPubKey[:], round.temp.m.Bytes())
 
-	// 10. Broadcast si to other parties
+	// Broadcast si to other parties
 	r3msg := NewSignRound3Message(round.PartyID(), encodedBytesToBigInt(&localS))
 	round.temp.signRound3Messages[round.PartyID().Index] = r3msg
 	round.out <- r3msg
