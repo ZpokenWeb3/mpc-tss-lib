@@ -14,7 +14,8 @@ import (
 	"github.com/bnb-chain/tss-lib/v2/crypto/commitments"
 	"github.com/bnb-chain/tss-lib/v2/crypto/vss"
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
-	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
+	"github.com/bnb-chain/tss-lib/v2/eddsa/signing_ed25519"
+
 	"github.com/bnb-chain/tss-lib/v2/tss"
 )
 
@@ -48,7 +49,8 @@ func (round *round1) Start() *tss.Error {
 		return round.WrapError(fmt.Errorf("t+1=%d is not satisfied by the key count of %d", round.Threshold()+1, len(ks)), round.PartyID())
 	}
 	newKs := round.NewParties().IDs().Keys()
-	wi := signing.PrepareForSigning(round.Params().EC(), i, len(round.OldParties().IDs()), xi, ks)
+
+	wi := signing_ed25519.PrepareForSigning(round.Params().EC(), i, len(round.OldParties().IDs()), xi, ks)
 
 	// 2.
 	vi, shares, err := vss.Create(round.Params().EC(), round.NewThreshold(), wi, newKs, round.Rand())

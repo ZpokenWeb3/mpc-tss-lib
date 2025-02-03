@@ -31,7 +31,7 @@ var (
 
 // Creates a new ECPoint and checks that the given coordinates are on the elliptic curve.
 func NewECPoint(curve elliptic.Curve, X, Y *big.Int) (*ECPoint, error) {
-	if !isOnCurve(curve, X, Y) {
+	if !curve.IsOnCurve(X, Y) {
 		return nil, fmt.Errorf("NewECPoint: the given point is not on the elliptic curve")
 	}
 	return &ECPoint{curve, [2]*big.Int{X, Y}}, nil

@@ -4,42 +4,38 @@
 // terms governing use, modification, and redistribution, is contained in the
 // file LICENSE at the root of the source code distribution tree.
 
-package resharing_test
+package resharing
 
 import (
 	"math/big"
 	"sync/atomic"
 	"testing"
 
-	"github.com/decred/dcrd/dcrec/edwards/v2"
-	"github.com/ipfs/go-log"
-	"github.com/stretchr/testify/assert"
-
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
-	. "github.com/bnb-chain/tss-lib/v2/eddsa/resharing"
-	"github.com/bnb-chain/tss-lib/v2/eddsa/signing"
+	signing "github.com/bnb-chain/tss-lib/v2/eddsa/signing_ed25519"
 	"github.com/bnb-chain/tss-lib/v2/test"
 	"github.com/bnb-chain/tss-lib/v2/tss"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
+	"github.com/ipfs/go-log"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
-	testParticipants = test.TestParticipants
-	testThreshold    = test.TestThreshold
+	testParticipants = TestParticipants
+	testThreshold    = TestThreshold
 )
 
 func setUp(level string) {
 	if err := log.SetLogLevel("tss-lib", level); err != nil {
 		panic(err)
 	}
-
-	// only for test
-	tss.SetCurve(tss.Edwards())
 }
 
 func TestE2EConcurrent(t *testing.T) {
 	setUp("info")
+	tss.SetCurve(tss.Edwards())
 
 	threshold, newThreshold := testThreshold, testThreshold
 

@@ -7,18 +7,20 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/bnb-chain/tss-lib/v2/common"
 	"github.com/bnb-chain/tss-lib/v2/crypto"
 	"github.com/bnb-chain/tss-lib/v2/crypto/vss"
 	"github.com/bnb-chain/tss-lib/v2/test"
 	"github.com/bnb-chain/tss-lib/v2/tss"
 	iden3bjj "github.com/iden3/go-iden3-crypto/babyjub"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBJJ(t *testing.T) {
 	setUp("info")
+
+	// only for test
+	tss.SetCurve(tss.BabyJubJub())
 
 	threshold := testThreshold
 	fixtures, pIDs, err := LoadKeygenTestFixtures(testParticipants)

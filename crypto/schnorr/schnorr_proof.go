@@ -35,7 +35,11 @@ func NewZKProof(Session []byte, x *big.Int, X *crypto.ECPoint, rand io.Reader) (
 	ec := X.Curve()
 	ecParams := ec.Params()
 	q := ecParams.N
-	g := crypto.NewECPointNoCurveCheck(ec, ecParams.Gx, ecParams.Gy) // already on the curve.
+
+	g, e := crypto.NewECPoint(ec, ecParams.Gx, ecParams.Gy) // already on the curve.
+	if e != nil {
+		return nil, errors.New("point is not on curve")
+	}
 
 	a := common.GetRandomPositiveInt(rand, q)
 	alpha := crypto.ScalarBaseMult(ec, a)
