@@ -1,0 +1,243 @@
+// Copyright © 2019 Binance
+//
+// This file is part of Binance. The full Binance copyright notice, including
+// terms governing use, modification, and redistribution, is contained in the
+// file LICENSE at the root of the source code distribution tree.
+
+package resharing
+
+import (
+	"fmt"
+	"math/big"
+	"sync/atomic"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/bnb-chain/tss-lib/v2/babyjubjub"
+	"github.com/bnb-chain/tss-lib/v2/common"
+	"github.com/bnb-chain/tss-lib/v2/crypto"
+	"github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
+	iden3bjj "github.com/iden3/go-iden3-crypto/babyjub"
+
+	signing_bjj "github.com/bnb-chain/tss-lib/v2/eddsa/signing_bjj"
+	"github.com/bnb-chain/tss-lib/v2/test"
+	"github.com/bnb-chain/tss-lib/v2/tss"
+)
+
+func TestBJJ(t *testing.T) {
+	setUp("info")
+
+	tss.SetCurve(tss.BabyJubJub())
+
+	threshold, newThreshold := testThreshold, testThreshold
+
+	// PHASE: load keygen fixtures
+	firstPartyIdx, extraParties := 1, 1 // // extra can be 0 to N-first
+	oldKeys, oldPIDs, err := keygen.LoadKeygenTestFixtures(testThreshold+1+extraParties+firstPartyIdx, firstPartyIdx)
+	assert.NoError(t, err, "should load keygen fixtures")
+
+	// PHASE: resharing
+	oldP2PCtx := tss.NewPeerContext(oldPIDs)
+
+	// init the new parties; re-use the fixture pre-params for speed
+	newPIDs := tss.GenerateTestPartyIDs(testParticipants)
+	newP2PCtx := tss.NewPeerContext(newPIDs)
+	newPCount := len(newPIDs)
+
+	oldCommittee := make([]*LocalParty, 0, len(oldPIDs))
+	newCommittee := make([]*LocalParty, 0, newPCount)
+	bothCommitteesPax := len(oldCommittee) + len(newCommittee)
+
+	errCh := make(chan *tss.Error, bothCommitteesPax)
+	outCh := make(chan tss.Message, bothCommitteesPax)
+	endCh := make(chan *keygen.LocalPartySaveData, bothCommitteesPax)
+
+	updater := test.SharedPartyUpdater
+
+	// init the old parties first
+	for j, pID := range oldPIDs {
+		params := tss.NewReSharingParameters(tss.BabyJubJub(), oldP2PCtx, newP2PCtx, pID, testParticipants, threshold, newPCount, newThreshold)
+		P := NewLocalParty(params, oldKeys[j], outCh, endCh).(*LocalParty) // discard old key data
+		oldCommittee = append(oldCommittee, P)
+	}
+
+	// init the new parties
+	for _, pID := range newPIDs {
+		params := tss.NewReSharingParameters(tss.BabyJubJub(), oldP2PCtx, newP2PCtx, pID, testParticipants, threshold, newPCount, newThreshold)
+		save := keygen.NewLocalPartySaveData(newPCount)
+		P := NewLocalParty(params, save, outCh, endCh).(*LocalParty)
+		newCommittee = append(newCommittee, P)
+	}
+
+	// start the new parties; they will wait for messages
+	for _, P := range newCommittee {
+		go func(P *LocalParty) {
+			if err := P.Start(); err != nil {
+				errCh <- err
+			}
+		}(P)
+	}
+	// start the old parties; they will send messages
+	for _, P := range oldCommittee {
+		go func(P *LocalParty) {
+			if err := P.Start(); err != nil {
+				errCh <- err
+			}
+		}(P)
+	}
+
+	newKeys := make([]keygen.LocalPartySaveData, len(newCommittee))
+	endedOldCommittee := 0
+	var reSharingEnded int32
+	for {
+		select {
+		case err := <-errCh:
+			common.Logger.Errorf("Error: %s", err)
+			assert.FailNow(t, err.Error())
+			return
+
+		case msg := <-outCh:
+			dest := msg.GetTo()
+			if dest == nil {
+				t.Fatal("did not expect a msg to have a nil destination during resharing")
+			}
+			if msg.IsToOldCommittee() || msg.IsToOldAndNewCommittees() {
+				for _, destP := range dest[:len(oldCommittee)] {
+					go updater(oldCommittee[destP.Index], msg, errCh)
+				}
+			}
+			if !msg.IsToOldCommittee() || msg.IsToOldAndNewCommittees() {
+				for _, destP := range dest {
+					go updater(newCommittee[destP.Index], msg, errCh)
+				}
+			}
+
+		case save := <-endCh:
+			// old committee members that aren't receiving a share have their Xi zeroed
+			if save.Xi != nil {
+				index, err := save.OriginalIndex()
+				assert.NoErrorf(t, err, "should not be an error getting a party's index from save data")
+				newKeys[index] = *save
+			} else {
+				endedOldCommittee++
+			}
+			atomic.AddInt32(&reSharingEnded, 1)
+			if atomic.LoadInt32(&reSharingEnded) == int32(len(oldCommittee)+len(newCommittee)) {
+				assert.Equal(t, len(oldCommittee), endedOldCommittee)
+				t.Logf("Resharing done. Reshared %d participants", reSharingEnded)
+
+				// xj tests: BigXj == xj*G
+				for j, key := range newKeys {
+					// xj test: BigXj == xj*G
+					xj := key.Xi
+					gXj := crypto.ScalarBaseMult(tss.BabyJubJub(), xj)
+					BigXj := key.BigXj[j]
+					assert.True(t, BigXj.Equals(gXj), "ensure BigX_j == g^x_j")
+				}
+
+				// more verification of signing is implemented within local_party_test.go of keygen package
+				goto signing
+			}
+		}
+	}
+
+signing:
+	// PHASE: signing
+	signKeys, signPIDs := newKeys, newPIDs
+	signP2pCtx := tss.NewPeerContext(signPIDs)
+	signParties := make([]*signing_bjj.LocalParty, 0, len(signPIDs))
+
+	signErrCh := make(chan *tss.Error, len(signPIDs))
+	signOutCh := make(chan tss.Message, len(signPIDs))
+	signEndCh := make(chan *common.SignatureData, len(signPIDs))
+
+	for j, signPID := range signPIDs {
+		params := tss.NewParameters(tss.BabyJubJub(), signP2pCtx, signPID, len(signPIDs), newThreshold)
+		P := signing_bjj.NewLocalParty(big.NewInt(42), params, signKeys[j], signOutCh, signEndCh).(*signing_bjj.LocalParty)
+		signParties = append(signParties, P)
+		go func(P *signing_bjj.LocalParty) {
+			if err := P.Start(); err != nil {
+				signErrCh <- err
+			}
+		}(P)
+	}
+
+	var signEnded int32
+	for {
+		select {
+		case err := <-signErrCh:
+			common.Logger.Errorf("Error: %s", err)
+			assert.FailNow(t, err.Error())
+			return
+
+		case msg := <-signOutCh:
+			dest := msg.GetTo()
+			if dest == nil {
+				for _, P := range signParties {
+					if P.PartyID().Index == msg.GetFrom().Index {
+						continue
+					}
+					go updater(P, msg, signErrCh)
+				}
+			} else {
+				if dest[0].Index == msg.GetFrom().Index {
+					t.Fatalf("party %d tried to send a message to itself (%d)", dest[0].Index, msg.GetFrom().Index)
+				}
+				go updater(signParties[dest[0].Index], msg, signErrCh)
+			}
+
+		case signData := <-signEndCh:
+			atomic.AddInt32(&signEnded, 1)
+			if atomic.LoadInt32(&signEnded) == int32(len(signPIDs)) {
+				t.Logf("Signing done. Received sign data from %d participants", signEnded)
+
+				// BEGIN EDDSA verify
+				pkX, pkY := signKeys[0].EDDSAPub.X(), signKeys[0].EDDSAPub.Y()
+				pk := iden3bjj.PublicKey{
+					X: pkX,
+					Y: pkY,
+				}
+
+				newSig, err := parseSig(signData.Signature)
+				if err != nil {
+					println("new sig error, ", err.Error())
+				}
+
+				ok := pk.VerifyPoseidon(big.NewInt(42), newSig)
+				assert.True(t, ok, "eddsa verify must pass")
+				t.Log("EDDSA signing test done.")
+				// END EDDSA verify
+
+				return
+			}
+		}
+	}
+}
+
+// parseSig parses a serialized BabyJubJub signature.
+func parseSig(sigStr []byte) (*iden3bjj.Signature, error) {
+	fmt.Printf("\n parseSig: %d \n", sigStr)
+	// Ensure the signature has the correct length for BabyJubJub
+	if len(sigStr) != 64 {
+		return nil, fmt.Errorf("bad signature size; have %v, want 64", len(sigStr))
+	}
+
+	curve := babyjubjub.BabyJubJub()
+	rBytes := copyBytes(sigStr[0:32])
+
+	R8, err := iden3bjj.NewPoint().Decompress(*rBytes)
+	if err != nil {
+		fmt.Printf("\n Error decompression %e \n", err)
+	}
+
+	sBytes := copyBytes(sigStr[32:64])
+	s := encodedBytesToBigInt(sBytes)
+
+	// Validate the scalar s: it must be non-zero and less than the order of the curve
+	if s.Cmp(curve.N) >= 0 || s.Cmp(big.NewInt(0)) == 0 {
+		return nil, fmt.Errorf("s scalar is empty or larger than the order of the curve")
+	}
+
+	return &iden3bjj.Signature{R8: R8, S: s}, nil
+}
